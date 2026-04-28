@@ -35,6 +35,20 @@ def list_teams(current_user: User = Depends(get_current_user), db: Session = Dep
     return teams
 
 
+@router.post("/join")
+def join_team(data: JoinTeamRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    team = db.query(Team).filter(Team.invite_code == data.invite_code).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    existing = db.query(TeamMember).filter(TeamMember.team_id == team.id, TeamMember.user_id == current_user.id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already a member")
+    member = TeamMember(team_id=team.id, user_id=current_user.id, role="member")
+    db.add(member)
+    db.commit()
+    return {"status": "joined", "team_id": team.id}
+
+
 @router.get("/{team_id}", response_model=TeamResponse)
 def get_team(team_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     team = db.query(Team).filter(Team.id == team_id).first()
@@ -65,20 +79,6 @@ def list_team_members(team_id: str, current_user: User = Depends(get_current_use
             "user_name": user.display_name if user else None,
         })
     return result
-
-
-@router.post("/join")
-def join_team(data: JoinTeamRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    team = db.query(Team).filter(Team.invite_code == data.invite_code).first()
-    if not team:
-        raise HTTPException(status_code=404, detail="Invalid invite code")
-    existing = db.query(TeamMember).filter(TeamMember.team_id == team.id, TeamMember.user_id == current_user.id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Already a member")
-    member = TeamMember(team_id=team.id, user_id=current_user.id, role="member")
-    db.add(member)
-    db.commit()
-    return {"status": "joined", "team_id": team.id}
 
 
 @router.delete("/{team_id}/members/{user_id}")
