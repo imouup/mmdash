@@ -29,6 +29,12 @@ export default function ExperimentPage() {
   const [paramName, setParamName] = useState("");
   const [paramValues, setParamValues] = useState("");
   const [params, setParams] = useState<Record<string, string[]>>({});
+
+  // Range input states
+  const [rangeName, setRangeName] = useState("");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
+  const [rangeStep, setRangeStep] = useState("");
   const [experimentResult, setExperimentResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -171,6 +177,26 @@ export default function ExperimentPage() {
     setParams((prev) => ({ ...prev, [paramName]: vals }));
     setParamName("");
     setParamValues("");
+  };
+
+  const addRangeParam = () => {
+    if (!rangeName || !rangeStart || !rangeEnd || !rangeStep) return;
+    const start = parseFloat(rangeStart);
+    const end = parseFloat(rangeEnd);
+    const step = parseFloat(rangeStep);
+    if (isNaN(start) || isNaN(end) || isNaN(step) || step === 0) {
+      setMessage("参数范围设置无效");
+      return;
+    }
+    const vals: string[] = [];
+    for (let v = start; v <= end + 1e-9; v += step) {
+      vals.push(String(Number(v.toFixed(6))));
+    }
+    setParams((prev) => ({ ...prev, [rangeName]: vals }));
+    setRangeName("");
+    setRangeStart("");
+    setRangeEnd("");
+    setRangeStep("");
   };
 
   const removeParam = (name: string) => {
@@ -398,6 +424,46 @@ export default function ExperimentPage() {
               </div>
               <div className="border rounded p-4">
                 <h3 className="font-medium mb-2">参数网格</h3>
+                <div className="mb-4 border-b pb-4">
+                  <div className="text-sm text-gray-500 mb-2">范围模式（起始、结束、步长）</div>
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="参数名"
+                      value={rangeName}
+                      onChange={(e) => setRangeName(e.target.value)}
+                      className="border rounded px-3 py-2"
+                    />
+                    <input
+                      type="number"
+                      placeholder="起始"
+                      value={rangeStart}
+                      onChange={(e) => setRangeStart(e.target.value)}
+                      className="border rounded px-3 py-2"
+                    />
+                    <input
+                      type="number"
+                      placeholder="结束"
+                      value={rangeEnd}
+                      onChange={(e) => setRangeEnd(e.target.value)}
+                      className="border rounded px-3 py-2"
+                    />
+                    <input
+                      type="number"
+                      placeholder="步长"
+                      value={rangeStep}
+                      onChange={(e) => setRangeStep(e.target.value)}
+                      className="border rounded px-3 py-2"
+                    />
+                  </div>
+                  <button
+                    onClick={addRangeParam}
+                    className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                  >
+                    添加范围参数
+                  </button>
+                </div>
+                <div className="text-sm text-gray-500 mb-2">手动模式</div>
                 <div className="flex gap-2 mb-3">
                   <input
                     type="text"
@@ -415,7 +481,7 @@ export default function ExperimentPage() {
                   />
                   <button
                     onClick={addParam}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
                   >
                     添加
                   </button>
