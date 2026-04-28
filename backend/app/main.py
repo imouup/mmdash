@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.database import engine, Base
-from app.api import auth, teams, projects, home, timeline, model, model_version
+from app.api import auth, teams, projects, home, timeline, model, model_version, git
 
 settings = get_settings()
 
@@ -29,6 +29,7 @@ app.include_router(home.router, prefix="/api/home", tags=["主页"])
 app.include_router(timeline.router, prefix="/api/timeline", tags=["时间线"])
 app.include_router(model.router, prefix="/api/model", tags=["模型"])
 app.include_router(model_version.router, prefix="/api/model-version", tags=["模型版本"])
+app.include_router(git.router, prefix="/api/git", tags=["Git"])
 
 
 @app.get("/health")

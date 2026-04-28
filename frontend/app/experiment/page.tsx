@@ -5,9 +5,9 @@ import DashboardLayout from "@/components/DashboardLayout";
 import {
   connectLocalAgent,
   disconnectLocalAgent,
-  isConnected,
   sendAction,
 } from "@/lib/local_agent";
+import api from "@/lib/api";
 
 interface EnvInfo {
   python_version: string;
@@ -33,12 +33,99 @@ export default function ExperimentPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  // Git integration states
+  const [projectId, setProjectId] = useState("");
+  const [solvers, setSolvers] = useState<any[]>([]);
+  const [gitCommits, setGitCommits] = useState<string[]>([]);
+  const [selectedSolver, setSelectedSolver] = useState<string>("");
+  const [extractedParams, setExtractedParams] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
   useEffect(() => {
     checkConnection();
     return () => {
       disconnectLocalAgent();
     };
   }, []);
+
+  const [projects, setProjects] = useState<any[]>([]);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await api.get("/teams");
+      if (res.data.length > 0) {
+        const projectsRes = await api.get("/projects", {
+          params: { team_id: res.data[0].id },
+        });
+        setProjects(projectsRes.data);
+        if (projectsRes.data.length > 0) {
+          setProjectId(projectsRes.data[0].id);
+        }
+      }
+    } catch {}
+  };
+
+  const scanSolvers = async () => {
+    if (!projectId || !repoPath) {
+      setMessage("请选择项目并指定仓库路径");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(`/git/${projectId}/scan`, {
+        params: { repo_path: repoPath },
+      });
+      setSolvers(res.data.solvers || []);
+      setMessage("扫描完成");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "扫描失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchGitLog = async () => {
+    if (!projectId || !repoPath) {
+      setMessage("请选择项目并指定仓库路径");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(`/git/${projectId}/log`, {
+        params: { repo_path: repoPath },
+      });
+      setGitCommits(res.data.commits || []);
+      setMessage("Git日志加载完成");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "加载Git日志失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const extractSolverParams = async (path: string) => {
+    if (!projectId) return;
+    setSelectedSolver(path);
+    try {
+      const res = await api.get(`/git/${projectId}/params`, {
+        params: { solver_path: path },
+      });
+      setExtractedParams(res.data.params || []);
+      // Auto-populate param grid
+      const newParams: Record<string, string[]> = {};
+      res.data.params.forEach((p: any) => {
+        if (p.type === "number") {
+          newParams[p.name] = [p.default, String(Number(p.default) * 2)];
+        } else {
+          newParams[p.name] = [p.default];
+        }
+      });
+      setParams(newParams);
+    } catch {}
+  };
 
   const checkConnection = async () => {
     try {
@@ -205,6 +292,83 @@ export default function ExperimentPage() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">Git 集成</h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Git 仓库路径"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={scanSolvers}
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  扫描 Solver 文件
+                </button>
+                <button
+                  onClick={fetchGitLog}
+                  disabled={loading}
+                  className="flex-1 bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-400"
+                >
+                  Git 日志
+                </button>
+              </div>
+            </div>
+
+            {solvers.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium mb-2">扫描到的 Solver 文件</h3>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {solvers.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setSolverPath(s.path);
+                        extractSolverParams(s.path);
+                      }}
+                      className={`w-full text-left text-sm p-2 rounded border ${
+                        selectedSolver === s.path ? "border-blue-500 bg-blue-50" : ""
+                      }`}
+                    >
+                      {s.rel_path}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {extractedParams.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium mb-2">提取到的参数</h3>
+                <div className="space-y-1">
+                  {extractedParams.map((p, i) => (
+                    <div key={i} className="text-sm bg-gray-100 p-2 rounded">
+                      {p.name}: {p.default} ({p.type})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {gitCommits.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium mb-2">最近提交</h3>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {gitCommits.map((c, i) => (
+                    <div key={i} className="text-sm text-gray-600 font-mono">
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold mb-4">自动化实验</h2>
             <div className="space-y-4">
