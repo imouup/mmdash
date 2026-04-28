@@ -7,7 +7,7 @@ from app.api.auth import get_current_user
 from app.models import User
 from app.services.notion_fetch import fetch_notion_page_content, notion_blocks_to_markdown
 from app.services.cache import get_cached_notion_page, set_cached_notion_page
-from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula
+from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula, find_errors
 
 router = APIRouter()
 
@@ -82,3 +82,11 @@ async def explain_formula_endpoint(project_id: str, formula: str, current_user: 
     markdown = result.get("markdown", "")
     explanation = await explain_formula(formula, markdown[:2000])
     return {"explanation": explanation, "disclaimer": "仅供参考"}
+
+
+@router.get("/{project_id}/analyze/errors")
+async def get_errors(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = await get_model_content(project_id, current_user, db)
+    markdown = result.get("markdown", "")
+    errors = await find_errors(markdown)
+    return {"errors": errors, "disclaimer": "仅供参考"}

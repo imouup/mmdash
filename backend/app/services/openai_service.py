@@ -83,3 +83,39 @@ Provide a clear, educational explanation suitable for a math modeling team membe
         return resp.choices[0].message.content
     except Exception as e:
         return f"Explanation failed: {str(e)}"
+
+
+async def find_errors(markdown_text: str) -> list:
+    """Find logical errors and typos in the model document."""
+    if not openai_client:
+        return []
+    prompt = f"""Review the following mathematical modeling document for potential errors.
+Look for:
+1. Mathematical typos or inconsistent notation
+2. Logical inconsistencies in the model assumptions
+3. Missing constraints or boundary conditions
+4. Formula errors or dimension mismatches
+
+For each issue found, provide:
+- The relevant text/excerpt
+- A description of the potential error
+- A severity level: "warning" or "error"
+
+Return as a JSON array of objects with fields: excerpt, description, severity.
+If no issues are found, return an empty array.
+
+Document:
+{markdown_text[:4000]}
+"""
+    try:
+        resp = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+        content = resp.choices[0].message.content
+        data = json.loads(content)
+        return data.get("errors", [])
+    except Exception:
+        return []

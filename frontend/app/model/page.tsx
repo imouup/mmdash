@@ -33,7 +33,13 @@ interface Commit {
   created_at: string;
 }
 
-type TabType = "content" | "symbols" | "structure" | "formula" | "version";
+interface ErrorItem {
+  excerpt: string;
+  description: string;
+  severity: "warning" | "error";
+}
+
+type TabType = "content" | "symbols" | "structure" | "formula" | "version" | "correction";
 
 export default function ModelPage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -58,6 +64,10 @@ export default function ModelPage() {
   const [selectedBaseCommit, setSelectedBaseCommit] = useState("");
   const [selectedCompareCommit, setSelectedCompareCommit] = useState("");
   const [diffResult, setDiffResult] = useState<string>("");
+
+  // Correction states
+  const [errors, setErrors] = useState<ErrorItem[]>([]);
+  const [dismissedErrors, setDismissedErrors] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchTeams();
@@ -237,6 +247,25 @@ export default function ModelPage() {
     }
   };
 
+  const fetchErrors = async () => {
+    if (!selectedProject) return;
+    setAnalysisLoading(true);
+    try {
+      const res = await api.get(`/model/${selectedProject}/analyze/errors`);
+      setErrors(res.data.errors || []);
+      setDismissedErrors(new Set());
+      setActiveTab("correction");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "纠错分析失败");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const dismissError = (index: number) => {
+    setDismissedErrors((prev) => new Set(prev).add(index));
+  };
+
   const rollback = async (snapshotId: string) => {
     if (!selectedProject) return;
     if (!confirm("确定要回滚到该版本吗？当前内容将自动备份。")) return;
@@ -399,6 +428,13 @@ export default function ModelPage() {
               >
                 结构解析
               </button>
+              <button
+                onClick={fetchErrors}
+                disabled={!selectedProject || analysisLoading}
+                className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 disabled:bg-gray-400"
+              >
+                纠错检查
+              </button>
             </div>
             <form onSubmit={explainFormula} className="mt-3 space-y-2">
               <input
@@ -437,6 +473,7 @@ export default function ModelPage() {
               { key: "symbols", label: "符号表" },
               { key: "structure", label: "结构解析" },
               { key: "formula", label: "公式解释" },
+              { key: "correction", label: "纠错" },
               { key: "version", label: "版本/Diff" },
             ].map((tab) => (
               <button
@@ -580,6 +617,56 @@ export default function ModelPage() {
                         <ReactMarkdown>{formulaExplanation}</ReactMarkdown>
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!analysisLoading && activeTab === "correction" && (
+              <div>
+                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
+                  ⚠️ 仅供参考 - 请人工审核纠错建议
+                </div>
+                {errors.length === 0 ? (
+                  <p className="text-gray-500">
+                    暂无纠错结果，点击"纠错检查"按钮开始分析
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {errors.map((err, i) => (
+                      !dismissedErrors.has(i) && (
+                        <div key={i} className={`border-l-4 p-4 rounded bg-white shadow ${
+                          err.severity === "error" ? "border-red-500" : "border-orange-500"
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-xs font-bold px-2 py-1 rounded ${
+                                  err.severity === "error"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-orange-100 text-orange-700"
+                                }`}>
+                                  {err.severity === "error" ? "错误" : "警告"}
+                                </span>
+                              </div>
+                              <div className="bg-gray-100 p-2 rounded mb-2 font-mono text-sm">
+                                {err.excerpt}
+                              </div>
+                              <p className="text-gray-700">{err.description}</p>
+                            </div>
+                            <button
+                              onClick={() => dismissError(i)}
+                              className="text-gray-400 hover:text-gray-600 ml-2"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                    {errors.every((_, i) => dismissedErrors.has(i)) && (
+                      <p className="text-gray-500">所有批注已关闭</p>
+                    )}
                   </div>
                 )}
               </div>
