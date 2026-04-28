@@ -46,6 +46,10 @@ export default function ExperimentPage() {
   const [selectedSolver, setSelectedSolver] = useState<string>("");
   const [extractedParams, setExtractedParams] = useState<any[]>([]);
 
+  // Sandbox / sync states
+  const [analysisContent, setAnalysisContent] = useState("");
+  const [resultFiles, setResultFiles] = useState<string[]>([]);
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -220,9 +224,80 @@ export default function ExperimentPage() {
         git_repo_path: repoPath || ".",
       });
       setExperimentResult(data);
+      // Scan result files
+      if (data.result_dir) {
+        scanResultFiles(data.result_dir);
+      }
       setMessage("实验执行完成");
     } catch (err: any) {
       setMessage("实验执行失败: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanResultFiles = async (dir: string) => {
+    try {
+      const data = await sendAction("shell", {
+        command: `find "${dir}" -type f | head -20`,
+      });
+      const files = data.stdout.split("\n").filter((f: string) => f.trim());
+      setResultFiles(files);
+      // Load analysis.md if exists
+      const analysisPath = files.find((f: string) => f.endsWith("analysis.md"));
+      if (analysisPath) {
+        const catData = await sendAction("shell", { command: `cat "${analysisPath}"` });
+        setAnalysisContent(catData.stdout);
+      }
+    } catch {}
+  };
+
+  const saveAnalysis = async () => {
+    if (!experimentResult?.result_dir) return;
+    const analysisPath = `${experimentResult.result_dir}/analysis.md`;
+    try {
+      // Escape content for shell
+      const escaped = analysisContent.replace(/"/g, '\\"').replace(/\n/g, "\\n");
+      await sendAction("shell", {
+        command: `printf "${escaped}" > "${analysisPath}"`,
+      });
+      setMessage("analysis.md 已保存");
+    } catch (err: any) {
+      setMessage("保存失败: " + err.message);
+    }
+  };
+
+  const gitAddCommitPush = async () => {
+    if (!repoPath) {
+      setMessage("请指定Git仓库路径");
+      return;
+    }
+    setLoading(true);
+    try {
+      const addRes = await sendAction("shell", {
+        command: `cd "${repoPath}" && git add .`,
+      });
+      if (addRes.returncode !== 0) {
+        setMessage("git add 失败: " + addRes.stderr);
+        return;
+      }
+      const commitRes = await sendAction("shell", {
+        command: `cd "${repoPath}" && git commit -m "experiment results"`,
+      });
+      if (commitRes.returncode !== 0 && !commitRes.stderr.includes("nothing to commit")) {
+        setMessage("git commit 失败: " + commitRes.stderr);
+        return;
+      }
+      const pushRes = await sendAction("shell", {
+        command: `cd "${repoPath}" && git push`,
+      });
+      if (pushRes.returncode !== 0) {
+        setMessage("git push 失败: " + pushRes.stderr);
+        return;
+      }
+      setMessage("Git同步完成: add → commit → push");
+    } catch (err: any) {
+      setMessage("Git操作失败: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -516,6 +591,61 @@ export default function ExperimentPage() {
               </button>
             </div>
           </div>
+
+          {experimentResult && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-lg font-semibold mb-4">实验结果与同步</h2>
+              <div className="space-y-2 text-sm mb-4">
+                <div>
+                  <span className="text-gray-500">状态:</span>{" "}
+                  {experimentResult.status}
+                </div>
+                <div>
+                  <span className="text-gray-500">结果目录:</span>{" "}
+                  {experimentResult.result_dir}
+                </div>
+                <div>
+                  <span className="text-gray-500">运行次数:</span>{" "}
+                  {experimentResult.results?.length}
+                </div>
+              </div>
+              <div className="mb-4">
+                <h3 className="font-medium mb-2">结果文件</h3>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {resultFiles.map((f, i) => (
+                    <div key={i} className="text-sm font-mono bg-gray-100 p-2 rounded">
+                      {f}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <h3 className="font-medium mb-2">分析草稿 (analysis.md)</h3>
+                <textarea
+                  value={analysisContent}
+                  onChange={(e) => setAnalysisContent(e.target.value)}
+                  className="w-full border rounded px-3 py-2 h-40"
+                  placeholder="在此撰写实验分析结论..."
+                />
+                <button
+                  onClick={saveAnalysis}
+                  className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  保存分析
+                </button>
+              </div>
+              <button
+                onClick={gitAddCommitPush}
+                disabled={!connected || loading}
+                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:bg-gray-400"
+              >
+                Git Add → Commit → Push
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                未Push的实验结果仅本地可见，Push后团队成员可查看
+              </p>
+            </div>
+          )}
 
           {shellOutput && (
             <div className="bg-white p-6 rounded-lg shadow">
