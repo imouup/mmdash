@@ -100,14 +100,27 @@ def get_notion_auth_url(current_user: User = Depends(get_current_user)):
     return {"auth_url": auth_url}
 
 
+from app.services.notion import exchange_code_for_token
+
 @router.post("/notion/callback")
-def notion_callback(data: NotionCallback, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # TODO: exchange code for access token via Notion API
-    # For now, placeholder implementation
-    binding = NotionBinding(
-        user_id=current_user.id,
-        access_token="placeholder_token",
-    )
-    db.add(binding)
-    db.commit()
-    return {"status": "success"}
+async def notion_callback(data: NotionCallback, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        token_data = await exchange_code_for_token(data.code)
+        access_token = token_data.get("access_token")
+        workspace_id = token_data.get("workspace_id")
+        workspace_name = token_data.get("workspace_name")
+        # Remove old binding if exists
+        old = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
+        if old:
+            db.delete(old)
+        binding = NotionBinding(
+            user_id=current_user.id,
+            access_token=access_token,
+            workspace_id=workspace_id,
+            workspace_name=workspace_name,
+        )
+        db.add(binding)
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Notion auth failed: {str(e)}")
