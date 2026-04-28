@@ -19,6 +19,12 @@ interface Project {
   model_data_page_id: string | null;
 }
 
+interface Symbol {
+  symbol: string;
+  meaning: string;
+  source: string;
+}
+
 export default function ModelPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
@@ -28,6 +34,14 @@ export default function ModelPage() {
   const [markdown, setMarkdown] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // LLM analysis states
+  const [symbols, setSymbols] = useState<Symbol[]>([]);
+  const [structure, setStructure] = useState<any>(null);
+  const [formulaInput, setFormulaInput] = useState("");
+  const [formulaExplanation, setFormulaExplanation] = useState("");
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"content" | "symbols" | "structure" | "formula">("content");
 
   useEffect(() => {
     fetchTeams();
@@ -124,6 +138,51 @@ export default function ModelPage() {
     }
   };
 
+  const fetchSymbols = async () => {
+    if (!selectedProject) return;
+    setAnalysisLoading(true);
+    try {
+      const res = await api.get(`/model/${selectedProject}/analyze/symbols`);
+      setSymbols(res.data.symbols || []);
+      setActiveTab("symbols");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "符号分析失败");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const fetchStructure = async () => {
+    if (!selectedProject) return;
+    setAnalysisLoading(true);
+    try {
+      const res = await api.get(`/model/${selectedProject}/analyze/structure`);
+      setStructure(res.data.structure || {});
+      setActiveTab("structure");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "结构分析失败");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const explainFormula = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProject || !formulaInput) return;
+    setAnalysisLoading(true);
+    try {
+      const res = await api.post(`/model/${selectedProject}/analyze/formula`, null, {
+        params: { formula: formulaInput },
+      });
+      setFormulaExplanation(res.data.explanation || "");
+      setActiveTab("formula");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "公式解释失败");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <h1 className="text-2xl font-bold mb-6">模型</h1>
@@ -187,6 +246,42 @@ export default function ModelPage() {
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">AI 分析</h2>
+            <div className="space-y-2">
+              <button
+                onClick={fetchSymbols}
+                disabled={!selectedProject || analysisLoading}
+                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:bg-gray-400"
+              >
+                符号表
+              </button>
+              <button
+                onClick={fetchStructure}
+                disabled={!selectedProject || analysisLoading}
+                className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:bg-gray-400"
+              >
+                结构解析
+              </button>
+            </div>
+            <form onSubmit={explainFormula} className="mt-3 space-y-2">
+              <input
+                type="text"
+                placeholder="输入公式..."
+                value={formulaInput}
+                onChange={(e) => setFormulaInput(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={!selectedProject || analysisLoading}
+                className="w-full bg-teal-600 text-white py-2 rounded hover:bg-teal-700 disabled:bg-gray-400"
+              >
+                公式解释
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold mb-4">导出</h2>
             <button
               onClick={exportMarkdown}
@@ -199,21 +294,158 @@ export default function ModelPage() {
         </div>
 
         <div className="lg:col-span-3">
-          <div className="bg-white p-6 rounded-lg shadow min-h-[600px]">
-            {loading ? (
-              <p className="text-gray-500">加载中...</p>
-            ) : markdown ? (
-              <div className="prose max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {markdown}
-                </ReactMarkdown>
+          {/* Tabs */}
+          <div className="bg-white rounded-t-lg shadow border-b flex">
+            {[
+              { key: "content", label: "内容" },
+              { key: "symbols", label: "符号表" },
+              { key: "structure", label: "结构解析" },
+              { key: "formula", label: "公式解释" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`flex-1 py-3 text-center font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-b-lg shadow p-6 min-h-[600px]">
+            {analysisLoading && (
+              <div className="text-center py-10">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="text-gray-500 mt-2">AI分析中...</p>
               </div>
-            ) : (
-              <p className="text-gray-500">
-                {selectedProject
-                  ? "请先绑定Notion模型页面"
-                  : "请选择一个项目"}
-              </p>
+            )}
+
+            {!analysisLoading && activeTab === "content" && (
+              <>
+                {loading ? (
+                  <p className="text-gray-500">加载中...</p>
+                ) : markdown ? (
+                  <div className="prose max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {markdown}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">
+                    {selectedProject
+                      ? "请先绑定Notion模型页面"
+                      : "请选择一个项目"}
+                  </p>
+                )}
+              </>
+            )}
+
+            {!analysisLoading && activeTab === "symbols" && (
+              <div>
+                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
+                  ⚠️ 仅供参考 - 请人工审核符号含义
+                </div>
+                {symbols.length === 0 ? (
+                  <p className="text-gray-500">暂无符号分析结果，点击"符号表"按钮开始分析</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border p-3 text-left">符号</th>
+                          <th className="border p-3 text-left">含义</th>
+                          <th className="border p-3 text-left">来源</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {symbols.map((s, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="border p-3 font-mono text-lg">{s.symbol}</td>
+                            <td className="border p-3">{s.meaning}</td>
+                            <td className="border p-3">
+                              <span
+                                className={`text-xs px-2 py-1 rounded ${
+                                  s.source === "user"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {s.source === "user" ? "手工定义" : "上下文推断"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!analysisLoading && activeTab === "structure" && (
+              <div>
+                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
+                  ⚠️ 仅供参考 - 请人工审核结构分析
+                </div>
+                {!structure ? (
+                  <p className="text-gray-500">暂无结构分析结果，点击"结构解析"按钮开始分析</p>
+                ) : (
+                  <div className="space-y-4">
+                    {structure.summary && (
+                      <div>
+                        <h3 className="font-semibold text-lg mb-2">总体概述</h3>
+                        <p className="text-gray-700">{structure.summary}</p>
+                      </div>
+                    )}
+                    {structure.sections && structure.sections.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold text-lg mb-2">关键章节</h3>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {structure.sections.map((s: string, i: number) => (
+                            <li key={i} className="text-gray-700">{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {structure.problem_relationship && (
+                      <div>
+                        <h3 className="font-semibold text-lg mb-2">与题目对应关系</h3>
+                        <p className="text-gray-700">{structure.problem_relationship}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!analysisLoading && activeTab === "formula" && (
+              <div>
+                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
+                  ⚠️ 仅供参考 - 请人工审核公式解释
+                </div>
+                {!formulaExplanation ? (
+                  <p className="text-gray-500">
+                    输入公式并点击"公式解释"按钮获取AI解释
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-gray-100 p-4 rounded">
+                      <div className="text-sm text-gray-500 mb-1">原始公式</div>
+                      <div className="font-mono text-lg">{formulaInput}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500 mb-1">解释</div>
+                      <div className="prose max-w-none">
+                        <ReactMarkdown>{formulaExplanation}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

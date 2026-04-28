@@ -7,6 +7,7 @@ from app.api.auth import get_current_user
 from app.models import User
 from app.services.notion_fetch import fetch_notion_page_content, notion_blocks_to_markdown
 from app.services.cache import get_cached_notion_page, set_cached_notion_page
+from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula
 
 router = APIRouter()
 
@@ -57,3 +58,27 @@ def link_model_page(project_id: str, page_id: str, current_user: User = Depends(
     project.model_data_page_id = page_id
     db.commit()
     return {"status": "linked", "model_data_page_id": page_id}
+
+
+@router.get("/{project_id}/analyze/symbols")
+async def get_symbols(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = await get_model_content(project_id, current_user, db)
+    markdown = result.get("markdown", "")
+    symbols = await analyze_symbols(markdown)
+    return {"symbols": symbols, "disclaimer": "仅供参考"}
+
+
+@router.get("/{project_id}/analyze/structure")
+async def get_structure(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = await get_model_content(project_id, current_user, db)
+    markdown = result.get("markdown", "")
+    structure = await analyze_structure(markdown)
+    return {"structure": structure, "disclaimer": "仅供参考"}
+
+
+@router.post("/{project_id}/analyze/formula")
+async def explain_formula_endpoint(project_id: str, formula: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = await get_model_content(project_id, current_user, db)
+    markdown = result.get("markdown", "")
+    explanation = await explain_formula(formula, markdown[:2000])
+    return {"explanation": explanation, "disclaimer": "仅供参考"}
