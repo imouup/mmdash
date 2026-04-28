@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.database import engine, Base
-from app.api import auth, teams, projects
+from app.api import auth, teams, projects, home
 
 settings = get_settings()
 
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(teams.router, prefix="/api/teams", tags=["团队"])
 app.include_router(projects.router, prefix="/api/projects", tags=["项目"])
+app.include_router(home.router, prefix="/api/home", tags=["主页"])
 
 
 @app.get("/health")

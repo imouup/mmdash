@@ -79,3 +79,35 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     team = relationship("Team", back_populates="projects")
+    todos = relationship("Todo", back_populates="project", cascade="all, delete-orphan")
+    problem_files = relationship("ProblemFile", back_populates="project", cascade="all, delete-orphan")
+
+
+class Todo(Base):
+    __tablename__ = "todos"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    is_team_todo = Column(Boolean, default=False)
+    due_date = Column(DateTime, nullable=True)
+    completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="todos")
+    user = relationship("User")
+
+
+class ProblemFile(Base):
+    __tablename__ = "problem_files"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_type = Column(String(50), nullable=False)
+    extracted_text = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="problem_files")
