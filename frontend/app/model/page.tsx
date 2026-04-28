@@ -25,6 +25,16 @@ interface Symbol {
   source: string;
 }
 
+interface Commit {
+  id: string;
+  commit_message: string;
+  user_email: string;
+  user_name: string | null;
+  created_at: string;
+}
+
+type TabType = "content" | "symbols" | "structure" | "formula" | "version";
+
 export default function ModelPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
@@ -35,13 +45,19 @@ export default function ModelPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // LLM analysis states
   const [symbols, setSymbols] = useState<Symbol[]>([]);
   const [structure, setStructure] = useState<any>(null);
   const [formulaInput, setFormulaInput] = useState("");
   const [formulaExplanation, setFormulaExplanation] = useState("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "symbols" | "structure" | "formula">("content");
+  const [activeTab, setActiveTab] = useState<TabType>("content");
+
+  // Version control states
+  const [commits, setCommits] = useState<Commit[]>([]);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [selectedBaseCommit, setSelectedBaseCommit] = useState("");
+  const [selectedCompareCommit, setSelectedCompareCommit] = useState("");
+  const [diffResult, setDiffResult] = useState<string>("");
 
   useEffect(() => {
     fetchTeams();
@@ -61,6 +77,7 @@ export default function ModelPage() {
       } else {
         setMarkdown("");
       }
+      fetchCommits(selectedProject);
     }
   }, [selectedProject]);
 
@@ -102,6 +119,15 @@ export default function ModelPage() {
       setMessage(err.response?.data?.detail || "获取模型内容失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCommits = async (projectId: string) => {
+    try {
+      const res = await api.get(`/model-version/${projectId}/commits`);
+      setCommits(res.data);
+    } catch {
+      setCommits([]);
     }
   };
 
@@ -183,6 +209,48 @@ export default function ModelPage() {
     }
   };
 
+  const createCommit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProject || !commitMessage) return;
+    try {
+      await api.post(`/model-version/${selectedProject}/commit`, null, {
+        params: { message: commitMessage },
+      });
+      setCommitMessage("");
+      fetchCommits(selectedProject);
+      setMessage("版本已提交");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "提交失败");
+    }
+  };
+
+  const viewDiff = async () => {
+    if (!selectedProject || !selectedBaseCommit || !selectedCompareCommit) return;
+    try {
+      const res = await api.get(`/model-version/${selectedProject}/diff`, {
+        params: { base_id: selectedBaseCommit, compare_id: selectedCompareCommit },
+      });
+      setDiffResult(res.data.diff || "");
+      setActiveTab("version");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "Diff失败");
+    }
+  };
+
+  const rollback = async (snapshotId: string) => {
+    if (!selectedProject) return;
+    if (!confirm("确定要回滚到该版本吗？当前内容将自动备份。")) return;
+    try {
+      await api.post(`/model-version/${selectedProject}/rollback`, null, {
+        params: { snapshot_id: snapshotId },
+      });
+      fetchCommits(selectedProject);
+      setMessage("回滚准备完成，请检查Notion页面");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "回滚失败");
+    }
+  };
+
   return (
     <DashboardLayout>
       <h1 className="text-2xl font-bold mb-6">模型</h1>
@@ -246,6 +314,75 @@ export default function ModelPage() {
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">版本控制</h2>
+            <form onSubmit={createCommit} className="space-y-3">
+              <input
+                type="text"
+                placeholder="提交信息..."
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                required
+              />
+              <button
+                type="submit"
+                disabled={!selectedProject}
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                提交版本
+              </button>
+            </form>
+            <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
+              {commits.map((c) => (
+                <div key={c.id} className="text-sm border p-2 rounded">
+                  <div className="font-medium truncate">{c.commit_message}</div>
+                  <div className="text-xs text-gray-500">
+                    {c.user_email} · {new Date(c.created_at).toLocaleDateString()}
+                  </div>
+                  <button
+                    onClick={() => rollback(c.id)}
+                    className="text-xs text-blue-600 hover:underline mt-1"
+                  >
+                    回滚
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4">Diff</h2>
+            <div className="space-y-2">
+              <select
+                value={selectedBaseCommit}
+                onChange={(e) => setSelectedBaseCommit(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm"
+              >
+                <option value="">选择基础版本</option>
+                {commits.map((c) => (
+                  <option key={c.id} value={c.id}>{c.commit_message}</option>
+                ))}
+              </select>
+              <select
+                value={selectedCompareCommit}
+                onChange={(e) => setSelectedCompareCommit(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm"
+              >
+                <option value="">选择对比版本</option>
+                {commits.map((c) => (
+                  <option key={c.id} value={c.id}>{c.commit_message}</option>
+                ))}
+              </select>
+              <button
+                onClick={viewDiff}
+                className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800"
+              >
+                查看Diff
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold mb-4">AI 分析</h2>
             <div className="space-y-2">
               <button
@@ -294,18 +431,18 @@ export default function ModelPage() {
         </div>
 
         <div className="lg:col-span-3">
-          {/* Tabs */}
-          <div className="bg-white rounded-t-lg shadow border-b flex">
+          <div className="bg-white rounded-t-lg shadow border-b flex flex-wrap">
             {[
               { key: "content", label: "内容" },
               { key: "symbols", label: "符号表" },
               { key: "structure", label: "结构解析" },
               { key: "formula", label: "公式解释" },
+              { key: "version", label: "版本/Diff" },
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
-                className={`flex-1 py-3 text-center font-medium transition-colors ${
+                onClick={() => setActiveTab(tab.key as TabType)}
+                className={`flex-1 py-3 text-center font-medium transition-colors min-w-[80px] ${
                   activeTab === tab.key
                     ? "text-blue-600 border-b-2 border-blue-600"
                     : "text-gray-500 hover:text-gray-700"
@@ -444,6 +581,21 @@ export default function ModelPage() {
                       </div>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {!analysisLoading && activeTab === "version" && (
+              <div>
+                <h3 className="font-semibold text-lg mb-4">版本对比</h3>
+                {diffResult ? (
+                  <pre className="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm">
+                    {diffResult}
+                  </pre>
+                ) : (
+                  <p className="text-gray-500">
+                    在左侧选择两个版本并点击"查看Diff"进行对比
+                  </p>
                 )}
               </div>
             )}

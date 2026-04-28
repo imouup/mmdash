@@ -127,3 +127,17 @@ class TimelineEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+class ModelSnapshot(Base):
+    __tablename__ = "model_snapshots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    commit_message = Column(String(255), nullable=False)
+    notion_page_id = Column(String(255), nullable=False)
+    snapshot_content = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
