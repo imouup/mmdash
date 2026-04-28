@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "数模Dashboard API"
     DEBUG: bool = False
 
-    DATABASE_URL: str = "postgresql://mmdash:mmdash_secret@localhost:5432/mmdash"
+    DATABASE_URL: str = "sqlite:///./mmdash.db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     SECRET_KEY: str = "your-secret-key-change-in-production"
