@@ -4,10 +4,23 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
+import dynamic from "next/dynamic";
+
+const MarkdownRenderer = dynamic(() => import("@/components/model/markdown-renderer"), {
+  loading: () => (
+    <div className="space-y-4">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-5/6" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-2/3" />
+      <Skeleton className="h-4 w-full" />
+    </div>
+  ),
+});
+const FormulaExplanationRenderer = dynamic(() => import("@/components/model/markdown-renderer"), {
+  loading: () => <Skeleton className="h-32 w-full" />,
+});
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -634,11 +647,7 @@ export default function ModelPage() {
                     <Skeleton className="h-4 w-full" />
                   </div>
                 ) : markdown ? (
-                  <div className="prose max-w-none dark:prose-invert">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {markdown}
-                    </ReactMarkdown>
-                  </div>
+                  <MarkdownRenderer markdown={markdown} />
                 ) : (
                   <div className="text-center py-20">
                     <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -746,9 +755,7 @@ export default function ModelPage() {
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground mb-1">解释</div>
-                      <div className="prose max-w-none dark:prose-invert">
-                        <ReactMarkdown>{formulaExplanation}</ReactMarkdown>
-                      </div>
+                      <FormulaExplanationRenderer markdown={formulaExplanation} />
                     </div>
                   </div>
                 )}
