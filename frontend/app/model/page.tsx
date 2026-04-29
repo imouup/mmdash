@@ -3,10 +3,79 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import api from "@/lib/api";
+import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  FileText,
+  Link2,
+  GitCommit,
+  ArrowLeftRight,
+  Sigma,
+  LayoutList,
+  AlertTriangle,
+  Wand2,
+  Download,
+  Users,
+  FolderOpen,
+  RotateCcw,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 
 interface Team {
   id: string;
@@ -39,8 +108,6 @@ interface ErrorItem {
   severity: "warning" | "error";
 }
 
-type TabType = "content" | "symbols" | "structure" | "formula" | "version" | "correction";
-
 export default function ModelPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
@@ -49,25 +116,25 @@ export default function ModelPage() {
   const [pageId, setPageId] = useState("");
   const [markdown, setMarkdown] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const [symbols, setSymbols] = useState<Symbol[]>([]);
   const [structure, setStructure] = useState<any>(null);
   const [formulaInput, setFormulaInput] = useState("");
   const [formulaExplanation, setFormulaExplanation] = useState("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>("content");
+  const [activeTab, setActiveTab] = useState("content");
 
-  // Version control states
   const [commits, setCommits] = useState<Commit[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [selectedBaseCommit, setSelectedBaseCommit] = useState("");
   const [selectedCompareCommit, setSelectedCompareCommit] = useState("");
   const [diffResult, setDiffResult] = useState<string>("");
 
-  // Correction states
   const [errors, setErrors] = useState<ErrorItem[]>([]);
   const [dismissedErrors, setDismissedErrors] = useState<Set<number>>(new Set());
+
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(false);
 
   useEffect(() => {
     fetchTeams();
@@ -92,6 +159,7 @@ export default function ModelPage() {
   }, [selectedProject]);
 
   const fetchTeams = async () => {
+    setLoadingTeams(true);
     try {
       const res = await api.get("/teams");
       setTeams(res.data);
@@ -100,10 +168,13 @@ export default function ModelPage() {
       }
     } catch {
       setTeams([]);
+    } finally {
+      setLoadingTeams(false);
     }
   };
 
   const fetchProjects = async (teamId: string) => {
+    setLoadingProjects(true);
     try {
       const res = await api.get("/projects", { params: { team_id: teamId } });
       setProjects(res.data);
@@ -117,6 +188,8 @@ export default function ModelPage() {
       setProjects([]);
       setSelectedProject("");
       setMarkdown("");
+    } finally {
+      setLoadingProjects(false);
     }
   };
 
@@ -126,7 +199,7 @@ export default function ModelPage() {
       const res = await api.get(`/model/${projectId}/content`);
       setMarkdown(res.data.markdown || "");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "获取模型内容失败");
+      toast.error(err.response?.data?.detail || "获取模型内容失败");
     } finally {
       setLoading(false);
     }
@@ -150,9 +223,9 @@ export default function ModelPage() {
       });
       fetchProjects(selectedTeam);
       setPageId("");
-      setMessage("Notion页面已绑定");
+      toast.success("Notion 页面已绑定");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "绑定失败");
+      toast.error(err.response?.data?.detail || "绑定失败");
     }
   };
 
@@ -169,8 +242,9 @@ export default function ModelPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      toast.success("导出成功");
     } catch {
-      setMessage("导出失败");
+      toast.error("导出失败");
     }
   };
 
@@ -182,7 +256,7 @@ export default function ModelPage() {
       setSymbols(res.data.symbols || []);
       setActiveTab("symbols");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "符号分析失败");
+      toast.error(err.response?.data?.detail || "符号分析失败");
     } finally {
       setAnalysisLoading(false);
     }
@@ -196,7 +270,7 @@ export default function ModelPage() {
       setStructure(res.data.structure || {});
       setActiveTab("structure");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "结构分析失败");
+      toast.error(err.response?.data?.detail || "结构分析失败");
     } finally {
       setAnalysisLoading(false);
     }
@@ -213,7 +287,7 @@ export default function ModelPage() {
       setFormulaExplanation(res.data.explanation || "");
       setActiveTab("formula");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "公式解释失败");
+      toast.error(err.response?.data?.detail || "公式解释失败");
     } finally {
       setAnalysisLoading(false);
     }
@@ -228,9 +302,9 @@ export default function ModelPage() {
       });
       setCommitMessage("");
       fetchCommits(selectedProject);
-      setMessage("版本已提交");
+      toast.success("版本已提交");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "提交失败");
+      toast.error(err.response?.data?.detail || "提交失败");
     }
   };
 
@@ -243,7 +317,7 @@ export default function ModelPage() {
       setDiffResult(res.data.diff || "");
       setActiveTab("version");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "Diff失败");
+      toast.error(err.response?.data?.detail || "Diff 失败");
     }
   };
 
@@ -256,7 +330,7 @@ export default function ModelPage() {
       setDismissedErrors(new Set());
       setActiveTab("correction");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "纠错分析失败");
+      toast.error(err.response?.data?.detail || "纠错分析失败");
     } finally {
       setAnalysisLoading(false);
     }
@@ -268,311 +342,369 @@ export default function ModelPage() {
 
   const rollback = async (snapshotId: string) => {
     if (!selectedProject) return;
-    if (!confirm("确定要回滚到该版本吗？当前内容将自动备份。")) return;
     try {
       await api.post(`/model-version/${selectedProject}/rollback`, null, {
         params: { snapshot_id: snapshotId },
       });
       fetchCommits(selectedProject);
-      setMessage("回滚准备完成，请检查Notion页面");
+      toast.success("回滚准备完成，请检查 Notion 页面");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "回滚失败");
+      toast.error(err.response?.data?.detail || "回滚失败");
     }
   };
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold mb-6">模型</h1>
-      {message && (
-        <div className="bg-blue-100 text-blue-700 p-3 rounded mb-4">{message}</div>
-      )}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">模型</h1>
+          <p className="text-sm text-muted-foreground">
+            查看、分析和版本管理数学模型
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* 左侧 */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">选择项目</h2>
-            <div className="space-y-2 mb-4">
-              {teams.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTeam(t.id)}
-                  className={`w-full text-left border p-3 rounded transition-colors ${
-                    selectedTeam === t.id ? "border-blue-500 bg-blue-50" : ""
-                  }`}
-                >
-                  <div className="font-medium">{t.name}</div>
-                </button>
-              ))}
-            </div>
-            <div className="space-y-2">
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedProject(p.id)}
-                  className={`w-full text-left border p-3 rounded transition-colors ${
-                    selectedProject === p.id ? "border-green-500 bg-green-50" : ""
-                  }`}
-                >
-                  <div className="font-medium">{p.name}</div>
-                  {p.model_data_page_id && (
-                    <div className="text-xs text-green-600">已绑定Notion</div>
+          {/* 团队/项目选择 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                选择项目
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loadingTeams ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择团队" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {loadingProjects ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex items-center gap-2">
+                          {p.name}
+                          {p.model_data_page_id && (
+                            <Badge variant="outline" className="text-xs">已绑定</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 绑定 Notion */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                绑定 Notion
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={linkPage} className="space-y-3">
+                <Input
+                  placeholder="Notion Page ID"
+                  value={pageId}
+                  onChange={(e) => setPageId(e.target.value)}
+                  required
+                />
+                <Button type="submit" className="w-full" disabled={!selectedProject}>
+                  绑定
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* 版本控制 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <GitCommit className="h-4 w-4" />
+                版本控制
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <form onSubmit={createCommit} className="space-y-3">
+                <Input
+                  placeholder="提交信息..."
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  required
+                />
+                <Button type="submit" className="w-full" disabled={!selectedProject}>
+                  提交版本
+                </Button>
+              </form>
+              <Separator />
+              <ScrollArea className="h-40">
+                <div className="space-y-2">
+                  {commits.map((c) => (
+                    <div key={c.id} className="text-sm border rounded-lg p-2">
+                      <div className="font-medium truncate">{c.commit_message}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {c.user_email} · {new Date(c.created_at).toLocaleDateString()}
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            回滚
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>确认回滚</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              确定要回滚到「{c.commit_message}」吗？当前内容将自动备份。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => rollback(c.id)}>
+                              确认回滚
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ))}
+                  {commits.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-4">暂无提交记录</p>
                   )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">绑定Notion页面</h2>
-            <form onSubmit={linkPage} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Notion Page ID"
-                value={pageId}
-                onChange={(e) => setPageId(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                绑定
-              </button>
-            </form>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">版本控制</h2>
-            <form onSubmit={createCommit} className="space-y-3">
-              <input
-                type="text"
-                placeholder="提交信息..."
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <button
-                type="submit"
-                disabled={!selectedProject}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                提交版本
-              </button>
-            </form>
-            <div className="mt-4 space-y-2 max-h-40 overflow-y-auto">
-              {commits.map((c) => (
-                <div key={c.id} className="text-sm border p-2 rounded">
-                  <div className="font-medium truncate">{c.commit_message}</div>
-                  <div className="text-xs text-gray-500">
-                    {c.user_email} · {new Date(c.created_at).toLocaleDateString()}
-                  </div>
-                  <button
-                    onClick={() => rollback(c.id)}
-                    className="text-xs text-blue-600 hover:underline mt-1"
-                  >
-                    回滚
-                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Diff</h2>
-            <div className="space-y-2">
-              <select
-                value={selectedBaseCommit}
-                onChange={(e) => setSelectedBaseCommit(e.target.value)}
-                className="w-full border rounded px-3 py-2 text-sm"
-              >
-                <option value="">选择基础版本</option>
-                {commits.map((c) => (
-                  <option key={c.id} value={c.id}>{c.commit_message}</option>
-                ))}
-              </select>
-              <select
-                value={selectedCompareCommit}
-                onChange={(e) => setSelectedCompareCommit(e.target.value)}
-                className="w-full border rounded px-3 py-2 text-sm"
-              >
-                <option value="">选择对比版本</option>
-                {commits.map((c) => (
-                  <option key={c.id} value={c.id}>{c.commit_message}</option>
-                ))}
-              </select>
-              <button
-                onClick={viewDiff}
-                className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800"
-              >
-                查看Diff
-              </button>
-            </div>
-          </div>
+          {/* Diff */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ArrowLeftRight className="h-4 w-4" />
+                版本对比
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Select value={selectedBaseCommit} onValueChange={setSelectedBaseCommit}>
+                <SelectTrigger>
+                  <SelectValue placeholder="基础版本" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commits.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.commit_message}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedCompareCommit} onValueChange={setSelectedCompareCommit}>
+                <SelectTrigger>
+                  <SelectValue placeholder="对比版本" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commits.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.commit_message}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={viewDiff} variant="secondary" className="w-full">
+                查看 Diff
+              </Button>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">AI 分析</h2>
-            <div className="space-y-2">
-              <button
+          {/* AI 分析 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wand2 className="h-4 w-4" />
+                AI 分析
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
                 onClick={fetchSymbols}
                 disabled={!selectedProject || analysisLoading}
-                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:bg-gray-400"
+                variant="outline"
+                className="w-full"
               >
+                <Sigma className="h-4 w-4 mr-1" />
                 符号表
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={fetchStructure}
                 disabled={!selectedProject || analysisLoading}
-                className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:bg-gray-400"
+                variant="outline"
+                className="w-full"
               >
+                <LayoutList className="h-4 w-4 mr-1" />
                 结构解析
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={fetchErrors}
                 disabled={!selectedProject || analysisLoading}
-                className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 disabled:bg-gray-400"
+                variant="outline"
+                className="w-full"
               >
+                <AlertTriangle className="h-4 w-4 mr-1" />
                 纠错检查
-              </button>
-            </div>
-            <form onSubmit={explainFormula} className="mt-3 space-y-2">
-              <input
-                type="text"
-                placeholder="输入公式..."
-                value={formulaInput}
-                onChange={(e) => setFormulaInput(e.target.value)}
-                className="w-full border rounded px-3 py-2 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={!selectedProject || analysisLoading}
-                className="w-full bg-teal-600 text-white py-2 rounded hover:bg-teal-700 disabled:bg-gray-400"
-              >
-                公式解释
-              </button>
-            </form>
-          </div>
+              </Button>
+              <form onSubmit={explainFormula} className="space-y-2 pt-2">
+                <Input
+                  placeholder="输入公式..."
+                  value={formulaInput}
+                  onChange={(e) => setFormulaInput(e.target.value)}
+                />
+                <Button
+                  type="submit"
+                  disabled={!selectedProject || analysisLoading}
+                  variant="outline"
+                  className="w-full"
+                >
+                  公式解释
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">导出</h2>
-            <button
-              onClick={exportMarkdown}
-              disabled={!selectedProject}
-              className="w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-900 disabled:bg-gray-400"
-            >
-              导出 Markdown
-            </button>
-          </div>
+          {/* 导出 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                导出
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={exportMarkdown} disabled={!selectedProject} className="w-full">
+                导出 Markdown
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
+        {/* 右侧：内容区 */}
         <div className="lg:col-span-3">
-          <div className="bg-white rounded-t-lg shadow border-b flex flex-wrap">
-            {[
-              { key: "content", label: "内容" },
-              { key: "symbols", label: "符号表" },
-              { key: "structure", label: "结构解析" },
-              { key: "formula", label: "公式解释" },
-              { key: "correction", label: "纠错" },
-              { key: "version", label: "版本/Diff" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as TabType)}
-                className={`flex-1 py-3 text-center font-medium transition-colors min-w-[80px] ${
-                  activeTab === tab.key
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full grid grid-cols-6">
+              <TabsTrigger value="content">内容</TabsTrigger>
+              <TabsTrigger value="symbols">符号表</TabsTrigger>
+              <TabsTrigger value="structure">结构解析</TabsTrigger>
+              <TabsTrigger value="formula">公式解释</TabsTrigger>
+              <TabsTrigger value="correction">纠错</TabsTrigger>
+              <TabsTrigger value="version">版本/Diff</TabsTrigger>
+            </TabsList>
 
-          <div className="bg-white rounded-b-lg shadow p-6 min-h-[600px]">
-            {analysisLoading && (
-              <div className="text-center py-10">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="text-gray-500 mt-2">AI分析中...</p>
-              </div>
-            )}
+            <div className="mt-4 min-h-[600px]">
+              {analysisLoading && (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground mt-2">AI 分析中...</p>
+                </div>
+              )}
 
-            {!analysisLoading && activeTab === "content" && (
-              <>
+              <TabsContent value="content" className="mt-0">
                 {loading ? (
-                  <p className="text-gray-500">加载中...</p>
+                  <div className="space-y-4">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
                 ) : markdown ? (
-                  <div className="prose max-w-none">
+                  <div className="prose max-w-none dark:prose-invert">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                       {markdown}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-gray-500">
-                    {selectedProject
-                      ? "请先绑定Notion模型页面"
-                      : "请选择一个项目"}
-                  </p>
-                )}
-              </>
-            )}
-
-            {!analysisLoading && activeTab === "symbols" && (
-              <div>
-                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
-                  ⚠️ 仅供参考 - 请人工审核符号含义
-                </div>
-                {symbols.length === 0 ? (
-                  <p className="text-gray-500">暂无符号分析结果，点击"符号表"按钮开始分析</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100">
-                          <th className="border p-3 text-left">符号</th>
-                          <th className="border p-3 text-left">含义</th>
-                          <th className="border p-3 text-left">来源</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {symbols.map((s, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="border p-3 font-mono text-lg">{s.symbol}</td>
-                            <td className="border p-3">{s.meaning}</td>
-                            <td className="border p-3">
-                              <span
-                                className={`text-xs px-2 py-1 rounded ${
-                                  s.source === "user"
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-blue-100 text-blue-700"
-                                }`}
-                              >
-                                {s.source === "user" ? "手工定义" : "上下文推断"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="text-center py-20">
+                    <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">
+                      {selectedProject ? "请先绑定 Notion 模型页面" : "请选择一个项目"}
+                    </p>
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {!analysisLoading && activeTab === "structure" && (
-              <div>
-                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
-                  ⚠️ 仅供参考 - 请人工审核结构分析
-                </div>
-                {!structure ? (
-                  <p className="text-gray-500">暂无结构分析结果，点击"结构解析"按钮开始分析</p>
+              <TabsContent value="symbols" className="mt-0">
+                <Alert variant="warning" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>仅供参考</AlertTitle>
+                  <AlertDescription>请人工审核符号含义</AlertDescription>
+                </Alert>
+                {symbols.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Sigma className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">暂无符号分析结果</p>
+                    <p className="text-sm text-muted-foreground">点击左侧"符号表"按钮开始分析</p>
+                  </div>
                 ) : (
-                  <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>符号</TableHead>
+                        <TableHead>含义</TableHead>
+                        <TableHead>来源</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {symbols.map((s, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono text-lg">{s.symbol}</TableCell>
+                          <TableCell>{s.meaning}</TableCell>
+                          <TableCell>
+                            <Badge variant={s.source === "user" ? "default" : "secondary"}>
+                              {s.source === "user" ? "手工定义" : "上下文推断"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </TabsContent>
+
+              <TabsContent value="structure" className="mt-0">
+                <Alert variant="warning" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>仅供参考</AlertTitle>
+                  <AlertDescription>请人工审核结构分析</AlertDescription>
+                </Alert>
+                {!structure ? (
+                  <div className="text-center py-12">
+                    <LayoutList className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">暂无结构分析结果</p>
+                    <p className="text-sm text-muted-foreground">点击左侧"结构解析"按钮开始分析</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
                     {structure.summary && (
                       <div>
                         <h3 className="font-semibold text-lg mb-2">总体概述</h3>
-                        <p className="text-gray-700">{structure.summary}</p>
+                        <p className="text-muted-foreground">{structure.summary}</p>
                       </div>
                     )}
                     {structure.sections && structure.sections.length > 0 && (
@@ -580,7 +712,7 @@ export default function ModelPage() {
                         <h3 className="font-semibold text-lg mb-2">关键章节</h3>
                         <ul className="list-disc pl-5 space-y-1">
                           {structure.sections.map((s: string, i: number) => (
-                            <li key={i} className="text-gray-700">{s}</li>
+                            <li key={i} className="text-muted-foreground">{s}</li>
                           ))}
                         </ul>
                       </div>
@@ -588,105 +720,107 @@ export default function ModelPage() {
                     {structure.problem_relationship && (
                       <div>
                         <h3 className="font-semibold text-lg mb-2">与题目对应关系</h3>
-                        <p className="text-gray-700">{structure.problem_relationship}</p>
+                        <p className="text-muted-foreground">{structure.problem_relationship}</p>
                       </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {!analysisLoading && activeTab === "formula" && (
-              <div>
-                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
-                  ⚠️ 仅供参考 - 请人工审核公式解释
-                </div>
+              <TabsContent value="formula" className="mt-0">
+                <Alert variant="warning" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>仅供参考</AlertTitle>
+                  <AlertDescription>请人工审核公式解释</AlertDescription>
+                </Alert>
                 {!formulaExplanation ? (
-                  <p className="text-gray-500">
-                    输入公式并点击"公式解释"按钮获取AI解释
-                  </p>
+                  <div className="text-center py-12">
+                    <Sigma className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">输入公式并点击"公式解释"按钮</p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="bg-gray-100 p-4 rounded">
-                      <div className="text-sm text-gray-500 mb-1">原始公式</div>
+                    <div className="bg-muted p-4 rounded-lg">
+                      <div className="text-sm text-muted-foreground mb-1">原始公式</div>
                       <div className="font-mono text-lg">{formulaInput}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">解释</div>
-                      <div className="prose max-w-none">
+                      <div className="text-sm text-muted-foreground mb-1">解释</div>
+                      <div className="prose max-w-none dark:prose-invert">
                         <ReactMarkdown>{formulaExplanation}</ReactMarkdown>
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {!analysisLoading && activeTab === "correction" && (
-              <div>
-                <div className="bg-yellow-100 text-yellow-800 p-3 rounded mb-4 text-sm font-medium">
-                  ⚠️ 仅供参考 - 请人工审核纠错建议
-                </div>
+              <TabsContent value="correction" className="mt-0">
+                <Alert variant="warning" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>仅供参考</AlertTitle>
+                  <AlertDescription>请人工审核纠错建议</AlertDescription>
+                </Alert>
                 {errors.length === 0 ? (
-                  <p className="text-gray-500">
-                    暂无纠错结果，点击"纠错检查"按钮开始分析
-                  </p>
+                  <div className="text-center py-12">
+                    <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">暂无纠错结果</p>
+                    <p className="text-sm text-muted-foreground">点击左侧"纠错检查"按钮开始分析</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {errors.map((err, i) => (
                       !dismissedErrors.has(i) && (
-                        <div key={i} className={`border-l-4 p-4 rounded bg-white shadow ${
-                          err.severity === "error" ? "border-red-500" : "border-orange-500"
-                        }`}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-xs font-bold px-2 py-1 rounded ${
-                                  err.severity === "error"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-orange-100 text-orange-700"
-                                }`}>
-                                  {err.severity === "error" ? "错误" : "警告"}
-                                </span>
-                              </div>
-                              <div className="bg-gray-100 p-2 rounded mb-2 font-mono text-sm">
-                                {err.excerpt}
-                              </div>
-                              <p className="text-gray-700">{err.description}</p>
-                            </div>
-                            <button
+                        <Alert
+                          key={i}
+                          variant={err.severity === "error" ? "destructive" : "default"}
+                          className="relative"
+                        >
+                          <div className="absolute top-2 right-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
                               onClick={() => dismissError(i)}
-                              className="text-gray-400 hover:text-gray-600 ml-2"
                             >
                               ✕
-                            </button>
+                            </Button>
                           </div>
-                        </div>
+                          <AlertTitle className="flex items-center gap-2">
+                            {err.severity === "error" ? "错误" : "警告"}
+                          </AlertTitle>
+                          <AlertDescription className="space-y-2 mt-2">
+                            <div className="bg-muted p-2 rounded font-mono text-sm">
+                              {err.excerpt}
+                            </div>
+                            <p>{err.description}</p>
+                          </AlertDescription>
+                        </Alert>
                       )
                     ))}
                     {errors.every((_, i) => dismissedErrors.has(i)) && (
-                      <p className="text-gray-500">所有批注已关闭</p>
+                      <div className="text-center py-8 text-muted-foreground">
+                        所有批注已关闭
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {!analysisLoading && activeTab === "version" && (
-              <div>
+              <TabsContent value="version" className="mt-0">
                 <h3 className="font-semibold text-lg mb-4">版本对比</h3>
                 {diffResult ? (
-                  <pre className="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm">
+                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono">
                     {diffResult}
                   </pre>
                 ) : (
-                  <p className="text-gray-500">
-                    在左侧选择两个版本并点击"查看Diff"进行对比
-                  </p>
+                  <div className="text-center py-12">
+                    <ArrowLeftRight className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">在左侧选择两个版本并点击"查看 Diff"</p>
+                  </div>
                 )}
-              </div>
-            )}
-          </div>
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
       </div>
     </DashboardLayout>

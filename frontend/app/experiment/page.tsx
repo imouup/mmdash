@@ -8,6 +8,58 @@ import {
   sendAction,
 } from "@/lib/local_agent";
 import api from "@/lib/api";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import {
+  Wifi,
+  WifiOff,
+  Terminal,
+  GitBranch,
+  Play,
+  Save,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  FolderOpen,
+  FlaskConical,
+  Loader2,
+} from "lucide-react";
 
 interface EnvInfo {
   python_version: string;
@@ -29,31 +81,25 @@ export default function ExperimentPage() {
   const [paramName, setParamName] = useState("");
   const [paramValues, setParamValues] = useState("");
   const [params, setParams] = useState<Record<string, string[]>>({});
-
-  // Range input states
   const [rangeName, setRangeName] = useState("");
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [rangeStep, setRangeStep] = useState("");
   const [experimentResult, setExperimentResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
-  // Git integration states
   const [projectId, setProjectId] = useState("");
   const [solvers, setSolvers] = useState<any[]>([]);
   const [gitCommits, setGitCommits] = useState<string[]>([]);
   const [selectedSolver, setSelectedSolver] = useState<string>("");
   const [extractedParams, setExtractedParams] = useState<any[]>([]);
-
-  // Sandbox / sync states
   const [analysisContent, setAnalysisContent] = useState("");
   const [resultFiles, setResultFiles] = useState<string[]>([]);
-
-  // Experiment history states
   const [experiments, setExperiments] = useState<any[]>([]);
   const [selectedExperiment, setSelectedExperiment] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"run" | "history">("run");
+  const [activeTab, setActiveTab] = useState("run");
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
 
   useEffect(() => {
     fetchProjects();
@@ -66,9 +112,8 @@ export default function ExperimentPage() {
     };
   }, []);
 
-  const [projects, setProjects] = useState<any[]>([]);
-
   const fetchProjects = async () => {
+    setLoadingProjects(true);
     try {
       const res = await api.get("/teams");
       if (res.data.length > 0) {
@@ -80,12 +125,16 @@ export default function ExperimentPage() {
           setProjectId(projectsRes.data[0].id);
         }
       }
-    } catch {}
+    } catch {
+      setProjects([]);
+    } finally {
+      setLoadingProjects(false);
+    }
   };
 
   const scanSolvers = async () => {
     if (!projectId || !repoPath) {
-      setMessage("请选择项目并指定仓库路径");
+      toast.error("请选择项目并指定仓库路径");
       return;
     }
     setLoading(true);
@@ -94,9 +143,9 @@ export default function ExperimentPage() {
         params: { repo_path: repoPath },
       });
       setSolvers(res.data.solvers || []);
-      setMessage("扫描完成");
+      toast.success("扫描完成");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "扫描失败");
+      toast.error(err.response?.data?.detail || "扫描失败");
     } finally {
       setLoading(false);
     }
@@ -104,7 +153,7 @@ export default function ExperimentPage() {
 
   const fetchGitLog = async () => {
     if (!projectId || !repoPath) {
-      setMessage("请选择项目并指定仓库路径");
+      toast.error("请选择项目并指定仓库路径");
       return;
     }
     setLoading(true);
@@ -113,9 +162,9 @@ export default function ExperimentPage() {
         params: { repo_path: repoPath },
       });
       setGitCommits(res.data.commits || []);
-      setMessage("Git日志加载完成");
+      toast.success("Git 日志加载完成");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "加载Git日志失败");
+      toast.error(err.response?.data?.detail || "加载 Git 日志失败");
     } finally {
       setLoading(false);
     }
@@ -129,7 +178,6 @@ export default function ExperimentPage() {
         params: { solver_path: path },
       });
       setExtractedParams(res.data.params || []);
-      // Auto-populate param grid
       const newParams: Record<string, string[]> = {};
       res.data.params.forEach((p: any) => {
         if (p.type === "number") {
@@ -157,7 +205,7 @@ export default function ExperimentPage() {
       const data = await sendAction("detect_env");
       setEnvInfo(data);
     } catch (err: any) {
-      setMessage("环境检测失败: " + err.message);
+      toast.error("环境检测失败: " + err.message);
     }
   };
 
@@ -174,7 +222,7 @@ export default function ExperimentPage() {
         `Exit code: ${data.returncode}\n\nSTDOUT:\n${data.stdout}\n\nSTDERR:\n${data.stderr}`
       );
     } catch (err: any) {
-      setMessage("命令执行失败: " + err.message);
+      toast.error("命令执行失败: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -194,7 +242,7 @@ export default function ExperimentPage() {
     const end = parseFloat(rangeEnd);
     const step = parseFloat(rangeStep);
     if (isNaN(start) || isNaN(end) || isNaN(step) || step === 0) {
-      setMessage("参数范围设置无效");
+      toast.error("参数范围设置无效");
       return;
     }
     const vals: string[] = [];
@@ -218,7 +266,7 @@ export default function ExperimentPage() {
 
   const runExperiment = async () => {
     if (!solverPath) {
-      setMessage("请指定Solver文件路径");
+      toast.error("请指定 Solver 文件路径");
       return;
     }
     setLoading(true);
@@ -229,13 +277,12 @@ export default function ExperimentPage() {
         git_repo_path: repoPath || ".",
       });
       setExperimentResult(data);
-      // Scan result files
       if (data.result_dir) {
         scanResultFiles(data.result_dir);
       }
-      setMessage("实验执行完成");
+      toast.success("实验执行完成");
     } catch (err: any) {
-      setMessage("实验执行失败: " + err.message);
+      toast.error("实验执行失败: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -248,7 +295,6 @@ export default function ExperimentPage() {
       });
       const files = data.stdout.split("\n").filter((f: string) => f.trim());
       setResultFiles(files);
-      // Load analysis.md if exists
       const analysisPath = files.find((f: string) => f.endsWith("analysis.md"));
       if (analysisPath) {
         const catData = await sendAction("shell", { command: `cat "${analysisPath}"` });
@@ -261,20 +307,19 @@ export default function ExperimentPage() {
     if (!experimentResult?.result_dir) return;
     const analysisPath = `${experimentResult.result_dir}/analysis.md`;
     try {
-      // Escape content for shell
       const escaped = analysisContent.replace(/"/g, '\\"').replace(/\n/g, "\\n");
       await sendAction("shell", {
         command: `printf "${escaped}" > "${analysisPath}"`,
       });
-      setMessage("analysis.md 已保存");
+      toast.success("analysis.md 已保存");
     } catch (err: any) {
-      setMessage("保存失败: " + err.message);
+      toast.error("保存失败: " + err.message);
     }
   };
 
   const gitAddCommitPush = async () => {
     if (!repoPath) {
-      setMessage("请指定Git仓库路径");
+      toast.error("请指定 Git 仓库路径");
       return;
     }
     setLoading(true);
@@ -283,26 +328,26 @@ export default function ExperimentPage() {
         command: `cd "${repoPath}" && git add .`,
       });
       if (addRes.returncode !== 0) {
-        setMessage("git add 失败: " + addRes.stderr);
+        toast.error("git add 失败: " + addRes.stderr);
         return;
       }
       const commitRes = await sendAction("shell", {
         command: `cd "${repoPath}" && git commit -m "experiment results"`,
       });
       if (commitRes.returncode !== 0 && !commitRes.stderr.includes("nothing to commit")) {
-        setMessage("git commit 失败: " + commitRes.stderr);
+        toast.error("git commit 失败: " + commitRes.stderr);
         return;
       }
       const pushRes = await sendAction("shell", {
         command: `cd "${repoPath}" && git push`,
       });
       if (pushRes.returncode !== 0) {
-        setMessage("git push 失败: " + pushRes.stderr);
+        toast.error("git push 失败: " + pushRes.stderr);
         return;
       }
-      setMessage("Git同步完成: add → commit → push");
+      toast.success("Git 同步完成: add -> commit -> push");
     } catch (err: any) {
-      setMessage("Git操作失败: " + err.message);
+      toast.error("Git 操作失败: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -310,7 +355,7 @@ export default function ExperimentPage() {
 
   const fetchExperiments = async () => {
     if (!projectId || !repoPath) {
-      setMessage("请选择项目并指定仓库路径");
+      toast.error("请选择项目并指定仓库路径");
       return;
     }
     setLoading(true);
@@ -319,9 +364,9 @@ export default function ExperimentPage() {
         params: { repo_path: repoPath },
       });
       setExperiments(res.data.experiments || []);
-      setMessage("实验记录加载完成");
+      toast.success("实验记录加载完成");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "加载实验记录失败");
+      toast.error(err.response?.data?.detail || "加载实验记录失败");
     } finally {
       setLoading(false);
     }
@@ -336,7 +381,7 @@ export default function ExperimentPage() {
       });
       setSelectedExperiment(res.data);
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "加载实验详情失败");
+      toast.error(err.response?.data?.detail || "加载实验详情失败");
     } finally {
       setLoading(false);
     }
@@ -344,557 +389,604 @@ export default function ExperimentPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold mb-6">实验和求解</h1>
-      {message && (
-        <div className="bg-blue-100 text-blue-700 p-3 rounded mb-4">{message}</div>
-      )}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">实验和求解</h1>
+          <p className="text-sm text-muted-foreground">
+            连接本地 Agent，运行实验并管理结果
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧 */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Local Agent 状态</h2>
-            <div className="flex items-center gap-2 mb-4">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  connected ? "bg-green-500" : "bg-red-500"
-                }`}
-              />
-              <span>{connected ? "已连接" : "未连接"}</span>
-            </div>
-            {!connected && (
-              <button
-                onClick={checkConnection}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                重新连接
-              </button>
-            )}
-          </div>
-
-          {envInfo && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">本地环境</h2>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-gray-500">Python:</span>{" "}
-                  {envInfo.python_version.split(" ")[0]}
-                </div>
-                <div>
-                  <span className="text-gray-500">CPU:</span>{" "}
-                  {envInfo.cpu_count} 核
-                </div>
-                <div>
-                  <span className="text-gray-500">内存:</span>{" "}
-                  {envInfo.memory_gb} GB
-                </div>
-                <div>
-                  <span className="text-gray-500">Conda:</span>{" "}
-                  {envInfo.conda_available ? "✅" : "❌"}
-                </div>
-                <div>
-                  <span className="text-gray-500">GCC:</span>{" "}
-                  {envInfo.gcc_available ? "✅" : "❌"}
-                </div>
-                <div>
-                  <span className="text-gray-500">Git:</span>{" "}
-                  {envInfo.git_available ? "✅" : "❌"}
-                </div>
+          {/* Agent 状态 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                {connected ? (
+                  <Wifi className="h-4 w-4 text-green-500" />
+                ) : (
+                  <WifiOff className="h-4 w-4 text-destructive" />
+                )}
+                Local Agent
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant={connected ? "default" : "destructive"}>
+                  {connected ? "已连接" : "未连接"}
+                </Badge>
               </div>
-            </div>
+              {!connected && (
+                <Button onClick={checkConnection} className="w-full">
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  重新连接
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 环境信息 */}
+          {envInfo && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">本地环境</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Python:</span>{" "}
+                    {envInfo.python_version.split(" ")[0]}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">CPU:</span>{" "}
+                    {envInfo.cpu_count} 核
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">内存:</span>{" "}
+                    {envInfo.memory_gb} GB
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Conda:</span>{" "}
+                    {envInfo.conda_available ? "✅" : "❌"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">GCC:</span>{" "}
+                    {envInfo.gcc_available ? "✅" : "❌"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Git:</span>{" "}
+                    {envInfo.git_available ? "✅" : "❌"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Shell 执行</h2>
-            <form onSubmit={runShell} className="space-y-3">
-              <input
-                type="text"
-                placeholder="命令"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-              <input
-                type="text"
-                placeholder="工作目录（可选）"
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-              <button
-                type="submit"
-                disabled={!connected || loading}
-                className="w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-900 disabled:bg-gray-400"
-              >
-                执行
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex gap-2 mb-2">
-            <button
-              onClick={() => setActiveTab("run")}
-              className={`px-4 py-2 rounded font-medium ${
-                activeTab === "run"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              }`}
-            >
-              运行实验
-            </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`px-4 py-2 rounded font-medium ${
-                activeTab === "history"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              }`}
-            >
-              实验记录
-            </button>
-          </div>
-
-          {activeTab === "run" && (
-            <>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Git 集成</h2>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Git 仓库路径"
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={scanSolvers}
-                  disabled={loading}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  扫描 Solver 文件
-                </button>
-                <button
-                  onClick={fetchGitLog}
-                  disabled={loading}
-                  className="flex-1 bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-400"
-                >
-                  Git 日志
-                </button>
-              </div>
-            </div>
-
-            {solvers.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">扫描到的 Solver 文件</h3>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {solvers.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setSolverPath(s.path);
-                        extractSolverParams(s.path);
-                      }}
-                      className={`w-full text-left text-sm p-2 rounded border ${
-                        selectedSolver === s.path ? "border-blue-500 bg-blue-50" : ""
-                      }`}
-                    >
-                      {s.rel_path}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {extractedParams.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">提取到的参数</h3>
-                <div className="space-y-1">
-                  {extractedParams.map((p, i) => (
-                    <div key={i} className="text-sm bg-gray-100 p-2 rounded">
-                      {p.name}: {p.default} ({p.type})
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {gitCommits.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">最近提交</h3>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {gitCommits.map((c, i) => (
-                    <div key={i} className="text-sm text-gray-600 font-mono">
-                      {c}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">自动化实验</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Solver 文件路径
-                </label>
-                <input
-                  type="text"
-                  placeholder="/path/to/solver.py"
-                  value={solverPath}
-                  onChange={(e) => setSolverPath(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
+          {/* Shell 执行 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Terminal className="h-4 w-4" />
+                Shell 执行
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={runShell} className="space-y-3">
+                <Input
+                  placeholder="命令"
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Git 仓库路径
-                </label>
-                <input
-                  type="text"
-                  placeholder="/path/to/repo"
+                <Input
+                  placeholder="工作目录（可选）"
                   value={repoPath}
                   onChange={(e) => setRepoPath(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
                 />
-              </div>
-              <div className="border rounded p-4">
-                <h3 className="font-medium mb-2">参数网格</h3>
-                <div className="mb-4 border-b pb-4">
-                  <div className="text-sm text-gray-500 mb-2">范围模式（起始、结束、步长）</div>
-                  <div className="grid grid-cols-4 gap-2 mb-2">
-                    <input
-                      type="text"
-                      placeholder="参数名"
-                      value={rangeName}
-                      onChange={(e) => setRangeName(e.target.value)}
-                      className="border rounded px-3 py-2"
-                    />
-                    <input
-                      type="number"
-                      placeholder="起始"
-                      value={rangeStart}
-                      onChange={(e) => setRangeStart(e.target.value)}
-                      className="border rounded px-3 py-2"
-                    />
-                    <input
-                      type="number"
-                      placeholder="结束"
-                      value={rangeEnd}
-                      onChange={(e) => setRangeEnd(e.target.value)}
-                      className="border rounded px-3 py-2"
-                    />
-                    <input
-                      type="number"
-                      placeholder="步长"
-                      value={rangeStep}
-                      onChange={(e) => setRangeStep(e.target.value)}
-                      className="border rounded px-3 py-2"
-                    />
-                  </div>
-                  <button
-                    onClick={addRangeParam}
-                    className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-                  >
-                    添加范围参数
-                  </button>
-                </div>
-                <div className="text-sm text-gray-500 mb-2">手动模式</div>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    placeholder="参数名"
-                    value={paramName}
-                    onChange={(e) => setParamName(e.target.value)}
-                    className="flex-1 border rounded px-3 py-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="值，逗号分隔"
-                    value={paramValues}
-                    onChange={(e) => setParamValues(e.target.value)}
-                    className="flex-1 border rounded px-3 py-2"
-                  />
-                  <button
-                    onClick={addParam}
-                    className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-                  >
-                    添加
-                  </button>
-                </div>
-                {Object.entries(params).length > 0 && (
-                  <div className="space-y-1">
-                    {Object.entries(params).map(([name, vals]) => (
-                      <div
-                        key={name}
-                        className="flex justify-between items-center bg-gray-100 p-2 rounded text-sm"
-                      >
-                        <span>
-                          {name}: [{vals.join(", ")}]
-                        </span>
-                        <button
-                          onClick={() => removeParam(name)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          删除
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={runExperiment}
-                disabled={!connected || loading}
-                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:bg-gray-400"
-              >
-                {loading ? "执行中..." : "开始实验"}
-              </button>
-            </div>
-          </div>
-
-          {experimentResult && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">实验结果与同步</h2>
-              <div className="space-y-2 text-sm mb-4">
-                <div>
-                  <span className="text-gray-500">状态:</span>{" "}
-                  {experimentResult.status}
-                </div>
-                <div>
-                  <span className="text-gray-500">结果目录:</span>{" "}
-                  {experimentResult.result_dir}
-                </div>
-                <div>
-                  <span className="text-gray-500">运行次数:</span>{" "}
-                  {experimentResult.results?.length}
-                </div>
-              </div>
-              <div className="mb-4">
-                <h3 className="font-medium mb-2">结果文件</h3>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {resultFiles.map((f, i) => (
-                    <div key={i} className="text-sm font-mono bg-gray-100 p-2 rounded">
-                      {f}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mb-4">
-                <h3 className="font-medium mb-2">分析草稿 (analysis.md)</h3>
-                <textarea
-                  value={analysisContent}
-                  onChange={(e) => setAnalysisContent(e.target.value)}
-                  className="w-full border rounded px-3 py-2 h-40"
-                  placeholder="在此撰写实验分析结论..."
-                />
-                <button
-                  onClick={saveAnalysis}
-                  className="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                <Button
+                  type="submit"
+                  disabled={!connected || loading}
+                  variant="secondary"
+                  className="w-full"
                 >
-                  保存分析
-                </button>
-              </div>
-              <button
-                onClick={gitAddCommitPush}
-                disabled={!connected || loading}
-                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:bg-gray-400"
-              >
-                Git Add → Commit → Push
-              </button>
-              <p className="text-xs text-gray-500 mt-2">
-                未Push的实验结果仅本地可见，Push后团队成员可查看
-              </p>
-            </div>
-          )}
+                  执行
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
-          {shellOutput && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">Shell 输出</h2>
-              <pre className="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto text-sm">
-                {shellOutput}
-              </pre>
-            </div>
-          )}
+        {/* 右侧 */}
+        <div className="lg:col-span-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="run">
+                <Play className="h-4 w-4 mr-1" />
+                运行实验
+              </TabsTrigger>
+              <TabsTrigger value="history">
+                <FolderOpen className="h-4 w-4 mr-1" />
+                实验记录
+              </TabsTrigger>
+            </TabsList>
 
-          {experimentResult && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">实验结果</h2>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-gray-500">状态:</span>{" "}
-                  {experimentResult.status}
-                </div>
-                <div>
-                  <span className="text-gray-500">结果目录:</span>{" "}
-                  {experimentResult.result_dir}
-                </div>
-                <div>
-                  <span className="text-gray-500">运行次数:</span>{" "}
-                  {experimentResult.results?.length}
-                </div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {experimentResult.results?.map((r: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`border p-3 rounded text-sm ${
-                      r.returncode === 0
-                        ? "border-green-300 bg-green-50"
-                        : "border-red-300 bg-red-50"
-                    }`}
-                  >
-                    <div className="font-medium">
-                      运行 {i + 1}{" "}
-                      {r.params && `(${JSON.stringify(r.params)})`}
+            <TabsContent value="run" className="space-y-6 mt-0">
+              {/* Git 集成 */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    Git 集成
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder="Git 仓库路径"
+                    value={repoPath}
+                    onChange={(e) => setRepoPath(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={scanSolvers}
+                      disabled={loading}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      扫描 Solver
+                    </Button>
+                    <Button
+                      onClick={fetchGitLog}
+                      disabled={loading}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Git 日志
+                    </Button>
+                  </div>
+
+                  {solvers.length > 0 && (
+                    <div className="mt-4">
+                      <Label className="text-sm">扫描到的 Solver 文件</Label>
+                      <ScrollArea className="h-32 mt-2 border rounded-lg">
+                        <div className="p-2 space-y-1">
+                          {solvers.map((s, i) => (
+                            <Button
+                              key={i}
+                              variant={selectedSolver === s.path ? "default" : "ghost"}
+                              size="sm"
+                              className="w-full justify-start text-xs h-auto py-1.5"
+                              onClick={() => {
+                                setSolverPath(s.path);
+                                extractSolverParams(s.path);
+                              }}
+                            >
+                              {s.rel_path}
+                            </Button>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
-                    <div>返回码: {r.returncode}</div>
-                    {r.stdout && (
-                      <pre className="mt-1 text-xs bg-white p-2 rounded overflow-x-auto">
-                        {r.stdout}
-                      </pre>
+                  )}
+
+                  {extractedParams.length > 0 && (
+                    <div className="mt-4">
+                      <Label className="text-sm">提取到的参数</Label>
+                      <div className="mt-2 space-y-1">
+                        {extractedParams.map((p, i) => (
+                          <div key={i} className="text-sm bg-muted p-2 rounded-lg">
+                            {p.name}: {p.default} ({p.type})
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {gitCommits.length > 0 && (
+                    <div className="mt-4">
+                      <Label className="text-sm">最近提交</Label>
+                      <ScrollArea className="h-32 mt-2">
+                        <div className="space-y-1">
+                          {gitCommits.map((c, i) => (
+                            <div key={i} className="text-xs font-mono text-muted-foreground">
+                              {c}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 自动化实验 */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FlaskConical className="h-4 w-4" />
+                    自动化实验
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Solver 文件路径</Label>
+                    <Input
+                      placeholder="/path/to/solver.py"
+                      value={solverPath}
+                      onChange={(e) => setSolverPath(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Git 仓库路径</Label>
+                    <Input
+                      placeholder="/path/to/repo"
+                      value={repoPath}
+                      onChange={(e) => setRepoPath(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <h3 className="font-medium">参数网格</h3>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">
+                        范围模式（起始、结束、步长）
+                      </Label>
+                      <div className="grid grid-cols-4 gap-2">
+                        <Input
+                          placeholder="参数名"
+                          value={rangeName}
+                          onChange={(e) => setRangeName(e.target.value)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="起始"
+                          value={rangeStart}
+                          onChange={(e) => setRangeStart(e.target.value)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="结束"
+                          value={rangeEnd}
+                          onChange={(e) => setRangeEnd(e.target.value)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="步长"
+                          value={rangeStep}
+                          onChange={(e) => setRangeStep(e.target.value)}
+                        />
+                      </div>
+                      <Button onClick={addRangeParam} variant="outline" className="w-full">
+                        添加范围参数
+                      </Button>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">手动模式</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="参数名"
+                          value={paramName}
+                          onChange={(e) => setParamName(e.target.value)}
+                        />
+                        <Input
+                          placeholder="值，逗号分隔"
+                          value={paramValues}
+                          onChange={(e) => setParamValues(e.target.value)}
+                        />
+                        <Button onClick={addParam} variant="secondary">
+                          添加
+                        </Button>
+                      </div>
+                    </div>
+
+                    {Object.entries(params).length > 0 && (
+                      <div className="space-y-1">
+                        {Object.entries(params).map(([name, vals]) => (
+                          <div
+                            key={name}
+                            className="flex justify-between items-center bg-muted p-2 rounded-lg text-sm"
+                          >
+                            <span>
+                              {name}: [{vals.join(", ")}]
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-destructive hover:text-destructive"
+                              onClick={() => removeParam(name)}
+                            >
+                              删除
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-            </>
-          )}
 
-          {activeTab === "history" && (
-            <>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-semibold">实验记录</h2>
-                  <button
-                    onClick={fetchExperiments}
-                    disabled={loading}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  <Button
+                    onClick={runExperiment}
+                    disabled={!connected || loading}
+                    className="w-full"
                   >
-                    刷新记录
-                  </button>
-                </div>
-                <p className="text-sm text-gray-500 mb-4">
-                  展示本地 Git 仓库 results/ 目录下的所有实验记录。团队成员 Push 后 Pull 即可同步查看。
-                </p>
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        执行中...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-1" />
+                        开始实验
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
 
-                {experiments.length === 0 && (
-                  <div className="text-gray-500 text-center py-8">
-                    暂无实验记录。请先运行实验或确认 results/ 目录存在。
-                  </div>
-                )}
+              {/* 实验结果 */}
+              {experimentResult && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">实验结果与同步</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">状态:</span>{" "}
+                        <Badge variant={experimentResult.status === "success" ? "default" : "destructive"}>
+                          {experimentResult.status}
+                        </Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">运行次数:</span>{" "}
+                        {experimentResult.results?.length}
+                      </div>
+                    </div>
 
-                <div className="space-y-3">
-                  {experiments.map((exp, i) => (
-                    <div key={i} className="border rounded-lg overflow-hidden">
-                      <button
-                        onClick={() =>
-                          selectedExperiment?.dir_path === exp.dir_path
-                            ? setSelectedExperiment(null)
-                            : fetchExperimentDetail(exp.dir_path)
-                        }
-                        className="w-full text-left p-4 hover:bg-gray-50 flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              exp.structure?.is_complete
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
-                            }`}
-                          />
-                          <div>
-                            <div className="font-medium">{exp.solver_name}</div>
-                            <div className="text-sm text-gray-500">
-                              {exp.timestamp}
-                            </div>
+                    {resultFiles.length > 0 && (
+                      <div>
+                        <Label className="text-sm">结果文件</Label>
+                        <ScrollArea className="h-32 mt-2 border rounded-lg">
+                          <div className="p-2 space-y-1">
+                            {resultFiles.map((f, i) => (
+                              <div key={i} className="text-xs font-mono bg-muted p-1.5 rounded">
+                                {f}
+                              </div>
+                            ))}
                           </div>
-                        </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+
+                    <div>
+                      <Label className="text-sm">分析草稿 (analysis.md)</Label>
+                      <Textarea
+                        value={analysisContent}
+                        onChange={(e) => setAnalysisContent(e.target.value)}
+                        placeholder="在此撰写实验分析结论..."
+                        className="mt-2 min-h-[120px]"
+                      />
+                      <Button onClick={saveAnalysis} variant="outline" size="sm" className="mt-2">
+                        <Save className="h-3.5 w-3.5 mr-1" />
+                        保存分析
+                      </Button>
+                    </div>
+
+                    <Button
+                      onClick={gitAddCommitPush}
+                      disabled={!connected || loading}
+                      variant="secondary"
+                      className="w-full"
+                    >
+                      <Upload className="h-4 w-4 mr-1" />
+                      Git Add → Commit → Push
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      未 Push 的实验结果仅本地可见，Push 后团队成员可查看
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shell 输出 */}
+              {shellOutput && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Shell 输出</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm font-mono max-h-96">
+                      {shellOutput}
+                    </pre>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 实验结果列表 */}
+              {experimentResult && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">运行详情</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {experimentResult.results?.map((r: any, i: number) => (
+                      <div
+                        key={i}
+                        className={`border rounded-lg p-3 text-sm ${
+                          r.returncode === 0
+                            ? "border-green-200 bg-green-50/50"
+                            : "border-red-200 bg-red-50/50"
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
-                          {!exp.structure?.is_complete && (
-                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
-                              结构异常
-                            </span>
+                          {r.returncode === 0 ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
                           )}
-                          <span className="text-gray-400">
-                            {selectedExperiment?.dir_path === exp.dir_path
-                              ? "▲"
-                              : "▼"}
+                          <span className="font-medium">
+                            运行 {i + 1}{" "}
+                            {r.params && `(${JSON.stringify(r.params)})`}
                           </span>
                         </div>
-                      </button>
+                        <div className="text-muted-foreground mt-1">
+                          返回码: {r.returncode}
+                        </div>
+                        {r.stdout && (
+                          <pre className="mt-2 text-xs bg-background p-2 rounded border overflow-x-auto">
+                            {r.stdout}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
-                      {selectedExperiment?.dir_path === exp.dir_path && (
-                        <div className="border-t p-4 space-y-4">
-                          {!selectedExperiment.structure?.is_complete && (
-                            <div className="bg-yellow-50 border border-yellow-300 rounded p-3 text-sm text-yellow-800">
-                              <span className="font-medium">目录结构异常：</span>
-                              缺少 {selectedExperiment.structure?.missing?.join(", ")}
+            <TabsContent value="history" className="mt-0">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <div>
+                    <CardTitle className="text-base">实验记录</CardTitle>
+                    <CardDescription>
+                      展示本地 Git 仓库 results/ 目录下的所有实验记录
+                    </CardDescription>
+                  </div>
+                  <Button onClick={fetchExperiments} disabled={loading} size="sm">
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    刷新
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {experiments.length === 0 ? (
+                    <div className="text-center py-12">
+                      <FolderOpen className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground">暂无实验记录</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        请先运行实验或确认 results/ 目录存在
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {experiments.map((exp, i) => (
+                        <div key={i} className="border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() =>
+                              selectedExperiment?.dir_path === exp.dir_path
+                                ? setSelectedExperiment(null)
+                                : fetchExperimentDetail(exp.dir_path)
+                            }
+                            className="w-full text-left p-4 hover:bg-muted/50 flex items-center justify-between transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-2 h-2 rounded-full ${
+                                  exp.structure?.is_complete
+                                    ? "bg-green-500"
+                                    : "bg-yellow-500"
+                                }`}
+                              />
+                              <div>
+                                <div className="font-medium">{exp.solver_name}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {exp.timestamp}
+                                </div>
+                              </div>
                             </div>
-                          )}
+                            <div className="flex items-center gap-2">
+                              {!exp.structure?.is_complete && (
+                                <Badge variant="destructive" className="text-xs">
+                                  结构异常
+                                </Badge>
+                              )}
+                              {selectedExperiment?.dir_path === exp.dir_path ? (
+                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                          </button>
 
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">目录：</span>
-                              {selectedExperiment.dir_name}
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Solver：</span>
-                              {selectedExperiment.solver_name}
-                            </div>
-                          </div>
+                          {selectedExperiment?.dir_path === exp.dir_path && (
+                            <div className="border-t p-4 space-y-4">
+                              {!selectedExperiment.structure?.is_complete && (
+                                <Alert variant="warning">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertTitle>目录结构异常</AlertTitle>
+                                  <AlertDescription>
+                                    缺少 {selectedExperiment.structure?.missing?.join(", ")}
+                                  </AlertDescription>
+                                </Alert>
+                              )}
 
-                          {Object.keys(selectedExperiment.params_snapshot || {}).length > 0 && (
-                            <div>
-                              <h4 className="font-medium mb-2">参数快照</h4>
-                              <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
-                                {JSON.stringify(selectedExperiment.params_snapshot, null, 2)}
-                              </pre>
-                            </div>
-                          )}
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">目录:</span>{" "}
+                                  {selectedExperiment.dir_name}
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Solver:</span>{" "}
+                                  {selectedExperiment.solver_name}
+                                </div>
+                              </div>
 
-                          {selectedExperiment.fig_files?.length > 0 && (
-                            <div>
-                              <h4 className="font-medium mb-2">图表文件</h4>
-                              <div className="space-y-1">
-                                {selectedExperiment.fig_files.map((fig: string, fi: number) => (
-                                  <div key={fi} className="text-sm font-mono bg-gray-100 p-2 rounded">
-                                    fig/{fig}
+                              {Object.keys(selectedExperiment.params_snapshot || {}).length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-2 text-sm">参数快照</h4>
+                                  <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto">
+                                    {JSON.stringify(selectedExperiment.params_snapshot, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+
+                              {selectedExperiment.fig_files?.length > 0 && (
+                                <div>
+                                  <h4 className="font-medium mb-2 text-sm">图表文件</h4>
+                                  <div className="space-y-1">
+                                    {selectedExperiment.fig_files.map((fig: string, fi: number) => (
+                                      <div key={fi} className="text-sm font-mono bg-muted p-2 rounded-lg">
+                                        fig/{fig}
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                                </div>
+                              )}
 
-                          {selectedExperiment.log && (
-                            <div>
-                              <h4 className="font-medium mb-2">运行日志</h4>
-                              <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-48">
-                                {selectedExperiment.log}
-                              </pre>
-                            </div>
-                          )}
+                              {selectedExperiment.log && (
+                                <div>
+                                  <h4 className="font-medium mb-2 text-sm">运行日志</h4>
+                                  <ScrollArea className="h-48 border rounded-lg">
+                                    <pre className="p-3 text-xs font-mono">
+                                      {selectedExperiment.log}
+                                    </pre>
+                                  </ScrollArea>
+                                </div>
+                              )}
 
-                          {selectedExperiment.analysis && (
-                            <div>
-                              <h4 className="font-medium mb-2">分析草稿</h4>
-                              <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">
-                                {selectedExperiment.analysis}
-                              </div>
+                              {selectedExperiment.analysis && (
+                                <div>
+                                  <h4 className="font-medium mb-2 text-sm">分析草稿</h4>
+                                  <div className="bg-muted p-3 rounded-lg text-sm whitespace-pre-wrap">
+                                    {selectedExperiment.analysis}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </DashboardLayout>

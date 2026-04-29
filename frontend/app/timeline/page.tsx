@@ -3,6 +3,57 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  CalendarDays,
+  Plus,
+  Trash2,
+  Clock,
+  Users,
+  FolderOpen,
+  CalendarX,
+} from "lucide-react";
 
 interface Team {
   id: string;
@@ -34,7 +85,9 @@ export default function TimelinePage() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [isTeamEvent, setIsTeamEvent] = useState(false);
-  const [message, setMessage] = useState("");
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchTeams();
@@ -53,6 +106,7 @@ export default function TimelinePage() {
   }, [selectedProject]);
 
   const fetchTeams = async () => {
+    setLoadingTeams(true);
     try {
       const res = await api.get("/teams");
       setTeams(res.data);
@@ -61,6 +115,8 @@ export default function TimelinePage() {
       }
     } catch {
       setTeams([]);
+    } finally {
+      setLoadingTeams(false);
     }
   };
 
@@ -82,11 +138,14 @@ export default function TimelinePage() {
   };
 
   const fetchEvents = async (projectId: string) => {
+    setLoadingEvents(true);
     try {
       const res = await api.get(`/timeline/${projectId}/events`);
       setEvents(res.data);
     } catch {
       setEvents([]);
+    } finally {
+      setLoadingEvents(false);
     }
   };
 
@@ -108,10 +167,11 @@ export default function TimelinePage() {
       setStartTime("");
       setEndTime("");
       setIsTeamEvent(false);
+      setAddDialogOpen(false);
       fetchEvents(selectedProject);
-      setMessage("日程添加成功");
+      toast.success("日程添加成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "添加失败");
+      toast.error(err.response?.data?.detail || "添加失败");
     }
   };
 
@@ -120,151 +180,276 @@ export default function TimelinePage() {
     try {
       await api.delete(`/timeline/${selectedProject}/events/${eventId}`);
       fetchEvents(selectedProject);
-      setMessage("日程已删除");
+      toast.success("日程已删除");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "删除失败");
+      toast.error(err.response?.data?.detail || "删除失败");
     }
   };
 
   const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("zh-CN", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatFullDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleString("zh-CN");
   };
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold mb-6">时间线</h1>
-      {message && (
-        <div className="bg-blue-100 text-blue-700 p-3 rounded mb-4">{message}</div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">选择项目</h2>
-            <div className="space-y-2 mb-4">
-              {teams.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTeam(t.id)}
-                  className={`w-full text-left border p-3 rounded transition-colors ${
-                    selectedTeam === t.id ? "border-blue-500 bg-blue-50" : ""
-                  }`}
-                >
-                  <div className="font-medium">{t.name}</div>
-                </button>
-              ))}
-            </div>
-            <div className="space-y-2">
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedProject(p.id)}
-                  className={`w-full text-left border p-3 rounded transition-colors ${
-                    selectedProject === p.id ? "border-green-500 bg-green-50" : ""
-                  }`}
-                >
-                  <div className="font-medium">{p.name}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">添加日程</h2>
-            <form onSubmit={createEvent} className="space-y-3">
-              <input
-                type="text"
-                placeholder="标题"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <textarea
-                placeholder="描述（可选）"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                rows={3}
-              />
-              <div>
-                <label className="block text-sm font-medium mb-1">开始时间</label>
-                <input
-                  type="datetime-local"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">时间线</h1>
+          <p className="text-sm text-muted-foreground">
+            管理项目日程和里程碑
+          </p>
+        </div>
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-1" />
+              添加日程
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>添加日程</DialogTitle>
+              <DialogDescription>
+                为当前项目添加一个新的日程安排
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={createEvent} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">标题</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="日程标题"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">结束时间（可选）</label>
-                <input
-                  type="datetime-local"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
+              <div className="space-y-2">
+                <Label htmlFor="description">描述</Label>
+                <Input
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="可选"
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">开始时间</Label>
+                  <Input
+                    id="startTime"
+                    type="datetime-local"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">结束时间</Label>
+                  <Input
+                    id="endTime"
+                    type="datetime-local"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isTeamEvent"
                   checked={isTeamEvent}
-                  onChange={(e) => setIsTeamEvent(e.target.checked)}
+                  onCheckedChange={(checked) =>
+                    setIsTeamEvent(checked === true)
+                  }
                 />
-                团队日程
-              </label>
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                添加
-              </button>
+                <Label htmlFor="isTeamEvent">团队日程</Label>
+              </div>
+              <DialogFooter>
+                <Button type="submit">添加</Button>
+              </DialogFooter>
             </form>
-          </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧：选择器 */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                选择团队
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingTeams ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择团队" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderOpen className="h-4 w-4" />
+                选择项目
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {projects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">暂无项目</p>
+              ) : (
+                <Select
+                  value={selectedProject}
+                  onValueChange={setSelectedProject}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
+        {/* 右侧：日程表 */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">日程表</h2>
-            {events.length === 0 ? (
-              <p className="text-gray-500">暂无日程</p>
-            ) : (
-              <div className="space-y-4">
-                {events.map((evt) => (
-                  <div
-                    key={evt.id}
-                    className="border-l-4 border-blue-500 pl-4 py-2"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-medium text-lg">{evt.title}</div>
-                        {evt.description && (
-                          <div className="text-gray-600 text-sm mt-1">{evt.description}</div>
-                        )}
-                        <div className="text-sm text-gray-500 mt-2">
-                          {formatDate(evt.start_time)}
-                          {evt.end_time && ` ~ ${formatDate(evt.end_time)}`}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                日程表
+              </CardTitle>
+              <CardDescription>
+                {events.length} 个日程安排
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingEvents ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              ) : events.length === 0 ? (
+                <div className="text-center py-12">
+                  <CalendarX className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">暂无日程</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    点击右上角添加新日程
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {events.map((evt) => (
+                    <div
+                      key={evt.id}
+                      className="flex gap-4 p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex flex-col items-center justify-center min-w-[60px]">
+                        <div className="text-2xl font-bold text-primary">
+                          {new Date(evt.start_time).getDate()}
                         </div>
-                        {evt.is_team_event && (
-                          <span className="inline-block mt-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            团队
-                          </span>
-                        )}
+                        <div className="text-xs text-muted-foreground uppercase">
+                          {new Date(evt.start_time).toLocaleString("zh-CN", {
+                            month: "short",
+                          })}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => deleteEvent(evt.id)}
-                        className="text-red-500 text-sm hover:text-red-700"
-                      >
-                        删除
-                      </button>
+                      <Separator orientation="vertical" className="h-auto" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="font-medium truncate">
+                              {evt.title}
+                            </h3>
+                            {evt.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {evt.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatFullDate(evt.start_time)}
+                                {evt.end_time &&
+                                  ` ~ ${formatFullDate(evt.end_time)}`}
+                              </span>
+                            </div>
+                            <div className="mt-2">
+                              {evt.is_team_event && (
+                                <Badge variant="secondary">团队</Badge>
+                              )}
+                            </div>
+                          </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  确定要删除日程「{evt.title}」吗？此操作不可撤销。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>取消</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteEvent(evt.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  删除
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </DashboardLayout>

@@ -3,6 +3,47 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import api from "@/lib/api";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Users,
+  FolderOpen,
+  Upload,
+  CheckCircle2,
+  Circle,
+  Loader2,
+} from "lucide-react";
 
 interface Team {
   id: string;
@@ -46,7 +87,12 @@ export default function HomePage() {
   const [gitUrl, setGitUrl] = useState("");
   const [todoContent, setTodoContent] = useState("");
   const [isTeamTodo, setIsTeamTodo] = useState(false);
-  const [message, setMessage] = useState("");
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingTodos, setLoadingTodos] = useState(false);
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [joinTeamOpen, setJoinTeamOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   useEffect(() => {
     fetchTeams();
@@ -66,6 +112,7 @@ export default function HomePage() {
   }, [selectedProject]);
 
   const fetchTeams = async () => {
+    setLoadingTeams(true);
     try {
       const res = await api.get("/teams");
       setTeams(res.data);
@@ -74,10 +121,13 @@ export default function HomePage() {
       }
     } catch {
       setTeams([]);
+    } finally {
+      setLoadingTeams(false);
     }
   };
 
   const fetchProjects = async (teamId: string) => {
+    setLoadingProjects(true);
     try {
       const res = await api.get("/projects", { params: { team_id: teamId } });
       setProjects(res.data);
@@ -89,15 +139,20 @@ export default function HomePage() {
     } catch {
       setProjects([]);
       setSelectedProject("");
+    } finally {
+      setLoadingProjects(false);
     }
   };
 
   const fetchTodos = async (projectId: string) => {
+    setLoadingTodos(true);
     try {
       const res = await api.get(`/home/${projectId}/todos`);
       setTodos(res.data);
     } catch {
       setTodos([]);
+    } finally {
+      setLoadingTodos(false);
     }
   };
 
@@ -115,10 +170,11 @@ export default function HomePage() {
     try {
       await api.post("/teams", { name: teamName });
       setTeamName("");
+      setCreateTeamOpen(false);
       fetchTeams();
-      setMessage("团队创建成功");
+      toast.success("团队创建成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "创建失败");
+      toast.error(err.response?.data?.detail || "创建失败");
     }
   };
 
@@ -127,17 +183,18 @@ export default function HomePage() {
     try {
       await api.post("/teams/join", { invite_code: inviteCode });
       setInviteCode("");
+      setJoinTeamOpen(false);
       fetchTeams();
-      setMessage("加入团队成功");
+      toast.success("加入团队成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "加入失败");
+      toast.error(err.response?.data?.detail || "加入失败");
     }
   };
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTeam) {
-      setMessage("请先选择团队");
+      toast.error("请先选择团队");
       return;
     }
     try {
@@ -153,10 +210,11 @@ export default function HomePage() {
       setProjectName("");
       setProjectDesc("");
       setGitUrl("");
+      setCreateProjectOpen(false);
       fetchProjects(selectedTeam);
-      setMessage("项目创建成功");
+      toast.success("项目创建成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "创建项目失败");
+      toast.error(err.response?.data?.detail || "创建项目失败");
     }
   };
 
@@ -169,9 +227,9 @@ export default function HomePage() {
       await api.post(`/home/${selectedProject}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setMessage("题目上传成功");
+      toast.success("题目上传成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "上传失败");
+      toast.error(err.response?.data?.detail || "上传失败");
     }
   };
 
@@ -186,9 +244,9 @@ export default function HomePage() {
       setIsTeamTodo(false);
       fetchTodos(selectedProject);
       fetchProgress(selectedProject);
-      setMessage("TODO添加成功");
+      toast.success("TODO 添加成功");
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "添加失败");
+      toast.error(err.response?.data?.detail || "添加失败");
     }
   };
 
@@ -201,261 +259,348 @@ export default function HomePage() {
     } catch {}
   };
 
+  const selectedTeamName = teams.find((t) => t.id === selectedTeam)?.name;
+  const selectedProjectName = projects.find((p) => p.id === selectedProject)?.name;
+
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-bold mb-6">主页</h1>
-      {message && (
-        <div className="bg-blue-100 text-blue-700 p-3 rounded mb-4">{message}</div>
-      )}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">主页</h1>
+          <p className="text-sm text-muted-foreground">
+            管理团队、项目、任务和进度
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* 左侧：团队和项目 */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">我的团队</h2>
-            {teams.length === 0 ? (
-              <p className="text-gray-500">暂无团队</p>
-            ) : (
-              <div className="space-y-2">
-                {teams.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setSelectedTeam(t.id)}
-                    className={`w-full text-left border p-3 rounded transition-colors ${
-                      selectedTeam === t.id ? "border-blue-500 bg-blue-50" : ""
-                    }`}
-                  >
-                    <div className="font-medium">{t.name}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      邀请码: {t.invite_code}
+          {/* 团队选择 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                我的团队
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loadingTeams ? (
+                <Skeleton className="h-9 w-full" />
+              ) : teams.length === 0 ? (
+                <p className="text-sm text-muted-foreground">暂无团队</p>
+              ) : (
+                <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择团队" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {selectedTeamName && (
+                <p className="text-xs text-muted-foreground">
+                  邀请码: {teams.find((t) => t.id === selectedTeam)?.invite_code}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Dialog open={createTeamOpen} onOpenChange={setCreateTeamOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      创建
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>创建团队</DialogTitle>
+                      <DialogDescription>创建一个新的团队以开始协作</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={createTeam} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="teamName">团队名称</Label>
+                        <Input
+                          id="teamName"
+                          value={teamName}
+                          onChange={(e) => setTeamName(e.target.value)}
+                          placeholder="输入团队名称"
+                          required
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">创建团队</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={joinTeamOpen} onOpenChange={setJoinTeamOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      加入
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>加入团队</DialogTitle>
+                      <DialogDescription>输入邀请码加入已有团队</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={joinTeam} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="inviteCode">邀请码</Label>
+                        <Input
+                          id="inviteCode"
+                          value={inviteCode}
+                          onChange={(e) => setInviteCode(e.target.value)}
+                          placeholder="输入邀请码"
+                          required
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">加入团队</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 项目选择 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderOpen className="h-4 w-4" />
+                项目
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loadingProjects ? (
+                <Skeleton className="h-9 w-full" />
+              ) : projects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">暂无项目</p>
+              ) : (
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Dialog open={createProjectOpen} onOpenChange={setCreateProjectOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    创建项目
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>创建项目</DialogTitle>
+                    <DialogDescription>在选定团队下创建新项目</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={createProject} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="projectName">项目名称</Label>
+                      <Input
+                        id="projectName"
+                        value={projectName}
+                        onChange={(e) => setProjectName(e.target.value)}
+                        placeholder="输入项目名称"
+                        required
+                      />
                     </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">项目</h2>
-            {projects.length === 0 ? (
-              <p className="text-gray-500">暂无项目</p>
-            ) : (
-              <div className="space-y-2">
-                {projects.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProject(p.id)}
-                    className={`w-full text-left border p-3 rounded transition-colors ${
-                      selectedProject === p.id ? "border-green-500 bg-green-50" : ""
-                    }`}
-                  >
-                    <div className="font-medium">{p.name}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">创建项目</h2>
-            <form onSubmit={createProject} className="space-y-3">
-              <input
-                type="text"
-                placeholder="项目名称"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <input
-                type="text"
-                placeholder="项目描述（可选）"
-                value={projectDesc}
-                onChange={(e) => setProjectDesc(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-              <input
-                type="text"
-                placeholder="Git远程仓库地址（可选）"
-                value={gitUrl}
-                onChange={(e) => setGitUrl(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              />
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                创建项目
-              </button>
-            </form>
-          </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="projectDesc">项目描述</Label>
+                      <Input
+                        id="projectDesc"
+                        value={projectDesc}
+                        onChange={(e) => setProjectDesc(e.target.value)}
+                        placeholder="可选"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gitUrl">Git 远程仓库</Label>
+                      <Input
+                        id="gitUrl"
+                        value={gitUrl}
+                        onChange={(e) => setGitUrl(e.target.value)}
+                        placeholder="可选"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit">创建项目</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* 中间：题目和TODO */}
+        {/* 中间：题目和 TODO */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">题目上传</h2>
-            <input
-              type="file"
-              accept=".pdf,.txt"
-              onChange={handleFileUpload}
-              disabled={!selectedProject}
-              className="w-full border rounded px-3 py-2"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              支持 PDF 和纯文本文件
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">TODO 列表</h2>
-            <form onSubmit={createTodo} className="flex gap-2 mb-4">
-              <input
-                type="text"
-                placeholder="添加 TODO..."
-                value={todoContent}
-                onChange={(e) => setTodoContent(e.target.value)}
-                className="flex-1 border rounded px-3 py-2"
-                required
+          {/* 题目上传 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                题目上传
+              </CardTitle>
+              <CardDescription>上传 PDF 或纯文本格式的题目文件</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Input
+                type="file"
+                accept=".pdf,.txt"
+                onChange={handleFileUpload}
+                disabled={!selectedProject}
               />
-              <label className="flex items-center gap-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isTeamTodo}
-                  onChange={(e) => setIsTeamTodo(e.target.checked)}
-                />
-                团队
-              </label>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                添加
-              </button>
-            </form>
-            {todos.length === 0 ? (
-              <p className="text-gray-500">暂无 TODO</p>
-            ) : (
-              <div className="space-y-2">
-                {todos.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-3 p-3 border rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={t.completed}
-                      onChange={() => toggleTodo(t.id)}
-                      className="w-5 h-5"
-                    />
-                    <span
-                      className={`flex-1 ${
-                        t.completed ? "line-through text-gray-400" : ""
-                      }`}
+              {!selectedProject && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  请先选择一个项目
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* TODO 列表 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                TODO 列表
+              </CardTitle>
+              <CardDescription>
+                {selectedProjectName
+                  ? `当前项目: ${selectedProjectName}`
+                  : "请先选择一个项目"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={createTodo} className="flex gap-2 items-end">
+                <div className="flex-1 space-y-2">
+                  <Input
+                    placeholder="添加 TODO..."
+                    value={todoContent}
+                    onChange={(e) => setTodoContent(e.target.value)}
+                    disabled={!selectedProject}
+                  />
+                </div>
+                <div className="flex items-center gap-2 pb-2">
+                  <Checkbox
+                    id="teamTodo"
+                    checked={isTeamTodo}
+                    onCheckedChange={(checked) => setIsTeamTodo(checked === true)}
+                    disabled={!selectedProject}
+                  />
+                  <Label htmlFor="teamTodo" className="text-sm whitespace-nowrap">
+                    团队
+                  </Label>
+                </div>
+                <Button type="submit" size="sm" disabled={!selectedProject || !todoContent}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </form>
+
+              {loadingTodos ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : todos.length === 0 ? (
+                <div className="text-center py-8">
+                  <Circle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">暂无 TODO</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {todos.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
                     >
-                      {t.content}
-                    </span>
-                    {t.is_team_todo && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                        团队
+                      <Checkbox
+                        checked={t.completed}
+                        onCheckedChange={() => toggleTodo(t.id)}
+                      />
+                      <span
+                        className={`flex-1 text-sm ${
+                          t.completed ? "line-through text-muted-foreground" : ""
+                        }`}
+                      >
+                        {t.content}
                       </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                      {t.is_team_todo && (
+                        <Badge variant="secondary" className="text-xs">
+                          团队
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* 右侧：进度和团队操作 */}
+        {/* 右侧：进度 */}
         <div className="space-y-6">
           {progress && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">整体进度</h2>
-              <div className="space-y-3">
-                <div>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">整体进度</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>总完成度</span>
-                    <span>{progress.completion_rate}%</span>
+                    <span className="text-muted-foreground">总完成度</span>
+                    <span className="font-medium">{progress.completion_rate}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded h-2 mt-1">
-                    <div
-                      className="bg-blue-600 h-2 rounded"
-                      style={{ width: `${progress.completion_rate}%` }}
-                    />
-                  </div>
+                  <Progress value={progress.completion_rate} />
                 </div>
-                <div>
+                <Separator />
+                <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>团队 TODO</span>
-                    <span>
+                    <span className="text-muted-foreground">团队 TODO</span>
+                    <span className="font-medium">
                       {progress.team.completed}/{progress.team.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded h-2 mt-1">
-                    <div
-                      className="bg-green-600 h-2 rounded"
-                      style={{ width: `${progress.team.rate}%` }}
-                    />
-                  </div>
+                  <Progress value={progress.team.rate} />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>个人 TODO</span>
-                    <span>
+                    <span className="text-muted-foreground">个人 TODO</span>
+                    <span className="font-medium">
                       {progress.personal.completed}/{progress.personal.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded h-2 mt-1">
-                    <div
-                      className="bg-purple-600 h-2 rounded"
-                      style={{ width: `${progress.personal.rate}%` }}
-                    />
-                  </div>
+                  <Progress value={progress.personal.rate} />
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">创建团队</h2>
-            <form onSubmit={createTeam} className="space-y-3">
-              <input
-                type="text"
-                placeholder="团队名称"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                创建
-              </button>
-            </form>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">加入团队</h2>
-            <form onSubmit={joinTeam} className="space-y-3">
-              <input
-                type="text"
-                placeholder="邀请码"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
-              >
-                加入
-              </button>
-            </form>
-          </div>
+          {!progress && !loadingProjects && selectedProject && (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Loader2 className="h-8 w-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">加载进度中...</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </DashboardLayout>
