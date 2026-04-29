@@ -151,48 +151,51 @@
 
 ## Quick Start
 
-### 1. 启动 Redis
+### 一键初始化（首次使用）
 
 ```bash
-# 首次使用：下载并编译 Redis
-./scripts/download-redis.sh
+# 安装 uv、编译 Redis、创建虚拟环境、同步所有依赖
+./scripts/setup.sh
+```
 
-# 启动 Redis 服务
+### 一键启动所有服务
+
+```bash
+# 同时启动 Redis + Backend + CloudAgent + LocalAgent + Frontend
+./scripts/start-all.sh
+```
+
+按 `Ctrl+C` 即可优雅关闭所有服务，避免僵尸进程。
+
+### 服务地址
+
+| 服务 | 地址 |
+|------|------|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| Backend Docs | http://localhost:8000/docs |
+| Cloud Agent | http://localhost:8001 |
+| Local Agent | ws://127.0.0.1:8765 |
+| Redis | localhost:6379 |
+
+### 单独启动（开发调试）
+
+```bash
+# Redis
 ./scripts/start-redis.sh
 
-# 关闭 Redis
-./scripts/stop-redis.sh
+# Backend
+cd backend && uv run uvicorn app.main:app --reload
+
+# Cloud Agent
+cd cloud_agent && uv run python main.py
+
+# Local Agent
+cd local_agent && uv run python main.py
+
+# Frontend
+cd frontend && npm run dev
 ```
-
-### 2. 启动后端
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-后端服务运行在 `http://localhost:8000`，API 文档在 `/docs`。
-
-### 3. 启动前端
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-前端服务运行在 `http://localhost:3000`。
-
-### 4. 启动 Local Agent（可选）
-
-```bash
-cd local_agent
-pip install websockets psutil
-python main.py
-```
-
-Local Agent 运行在 `ws://127.0.0.1:8765`。
 
 ---
 
@@ -200,13 +203,13 @@ Local Agent 运行在 `ws://127.0.0.1:8765`。
 
 ```
 .
-├── backend/              # FastAPI 后端服务
+├── backend/              # FastAPI 后端服务 (uv 虚拟环境)
 │   ├── app/
 │   │   ├── api/          # API 路由 (auth, teams, projects, ...)
 │   │   ├── core/         # 配置与设置
 │   │   ├── models.py     # SQLAlchemy 数据模型
 │   │   └── database.py   # 数据库连接 (SQLite)
-│   └── requirements.txt
+│   └── pyproject.toml    # uv 依赖管理
 ├── frontend/             # Next.js 前端
 │   ├── app/              # 页面路由
 │   │   ├── home/         # 主页面板
@@ -219,7 +222,8 @@ Local Agent 运行在 `ws://127.0.0.1:8765`。
 │   └── main.py
 ├── local_agent/          # 本地执行引擎 (WebSocket)
 │   └── main.py
-├── scripts/              # Redis 启动/编译脚本
+├── scripts/              # 一键初始化、一键启动、Redis 管理脚本
+├── logs/                 # 服务运行日志
 ├── redis/                # Redis 本地安装目录
 ├── PRD.md                # 产品需求文档
 └── stage1-plan.md        # 实现计划
