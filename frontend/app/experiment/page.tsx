@@ -50,6 +50,11 @@ export default function ExperimentPage() {
   const [analysisContent, setAnalysisContent] = useState("");
   const [resultFiles, setResultFiles] = useState<string[]>([]);
 
+  // Experiment history states
+  const [experiments, setExperiments] = useState<any[]>([]);
+  const [selectedExperiment, setSelectedExperiment] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"run" | "history">("run");
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -303,6 +308,40 @@ export default function ExperimentPage() {
     }
   };
 
+  const fetchExperiments = async () => {
+    if (!projectId || !repoPath) {
+      setMessage("请选择项目并指定仓库路径");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(`/git/${projectId}/experiments`, {
+        params: { repo_path: repoPath },
+      });
+      setExperiments(res.data.experiments || []);
+      setMessage("实验记录加载完成");
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "加载实验记录失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchExperimentDetail = async (dirPath: string) => {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      const res = await api.get(`/git/${projectId}/experiment`, {
+        params: { experiment_dir: dirPath },
+      });
+      setSelectedExperiment(res.data);
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || "加载实验详情失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <h1 className="text-2xl font-bold mb-6">实验和求解</h1>
@@ -393,6 +432,31 @@ export default function ExperimentPage() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => setActiveTab("run")}
+              className={`px-4 py-2 rounded font-medium ${
+                activeTab === "run"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              运行实验
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-4 py-2 rounded font-medium ${
+                activeTab === "history"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              实验记录
+            </button>
+          </div>
+
+          {activeTab === "run" && (
+            <>
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold mb-4">Git 集成</h2>
             <div className="space-y-3">
@@ -697,6 +761,139 @@ export default function ExperimentPage() {
                 ))}
               </div>
             </div>
+          )}
+            </>
+          )}
+
+          {activeTab === "history" && (
+            <>
+              <div className="bg-white p-6 rounded-lg shadow">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold">实验记录</h2>
+                  <button
+                    onClick={fetchExperiments}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    刷新记录
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">
+                  展示本地 Git 仓库 results/ 目录下的所有实验记录。团队成员 Push 后 Pull 即可同步查看。
+                </p>
+
+                {experiments.length === 0 && (
+                  <div className="text-gray-500 text-center py-8">
+                    暂无实验记录。请先运行实验或确认 results/ 目录存在。
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {experiments.map((exp, i) => (
+                    <div key={i} className="border rounded-lg overflow-hidden">
+                      <button
+                        onClick={() =>
+                          selectedExperiment?.dir_path === exp.dir_path
+                            ? setSelectedExperiment(null)
+                            : fetchExperimentDetail(exp.dir_path)
+                        }
+                        className="w-full text-left p-4 hover:bg-gray-50 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              exp.structure?.is_complete
+                                ? "bg-green-500"
+                                : "bg-yellow-500"
+                            }`}
+                          />
+                          <div>
+                            <div className="font-medium">{exp.solver_name}</div>
+                            <div className="text-sm text-gray-500">
+                              {exp.timestamp}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!exp.structure?.is_complete && (
+                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
+                              结构异常
+                            </span>
+                          )}
+                          <span className="text-gray-400">
+                            {selectedExperiment?.dir_path === exp.dir_path
+                              ? "▲"
+                              : "▼"}
+                          </span>
+                        </div>
+                      </button>
+
+                      {selectedExperiment?.dir_path === exp.dir_path && (
+                        <div className="border-t p-4 space-y-4">
+                          {!selectedExperiment.structure?.is_complete && (
+                            <div className="bg-yellow-50 border border-yellow-300 rounded p-3 text-sm text-yellow-800">
+                              <span className="font-medium">目录结构异常：</span>
+                              缺少 {selectedExperiment.structure?.missing?.join(", ")}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">目录：</span>
+                              {selectedExperiment.dir_name}
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Solver：</span>
+                              {selectedExperiment.solver_name}
+                            </div>
+                          </div>
+
+                          {Object.keys(selectedExperiment.params_snapshot || {}).length > 0 && (
+                            <div>
+                              <h4 className="font-medium mb-2">参数快照</h4>
+                              <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                                {JSON.stringify(selectedExperiment.params_snapshot, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+
+                          {selectedExperiment.fig_files?.length > 0 && (
+                            <div>
+                              <h4 className="font-medium mb-2">图表文件</h4>
+                              <div className="space-y-1">
+                                {selectedExperiment.fig_files.map((fig: string, fi: number) => (
+                                  <div key={fi} className="text-sm font-mono bg-gray-100 p-2 rounded">
+                                    fig/{fig}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedExperiment.log && (
+                            <div>
+                              <h4 className="font-medium mb-2">运行日志</h4>
+                              <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-48">
+                                {selectedExperiment.log}
+                              </pre>
+                            </div>
+                          )}
+
+                          {selectedExperiment.analysis && (
+                            <div>
+                              <h4 className="font-medium mb-2">分析草稿</h4>
+                              <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">
+                                {selectedExperiment.analysis}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
