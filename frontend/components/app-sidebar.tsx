@@ -35,16 +35,17 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 const navItems = [
-  { href: "/home", label: "主页", icon: Home, prefetch: true },
-  { href: "/timeline", label: "时间线", icon: CalendarDays, prefetch: true },
-  { href: "/model", label: "模型", icon: FileText, prefetch: false },
-  { href: "/experiment", label: "实验和求解", icon: FlaskConical, prefetch: false },
+  { href: "/home", label: "主页", icon: Home },
+  { href: "/timeline", label: "时间线", icon: CalendarDays },
+  { href: "/model", label: "模型", icon: FileText },
+  { href: "/experiment", label: "实验和求解", icon: FlaskConical },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { logout, user } = useAuthStore((s) => ({ logout: s.logout, user: s.user }))
+  const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
   const { state } = useSidebar()
 
   const handleLogout = () => {
@@ -84,7 +85,7 @@ export function AppSidebar() {
                     isActive={pathname === item.href}
                     tooltip={item.label}
                   >
-                    <Link href={item.href} prefetch={item.prefetch}>
+                    <Link href={item.href}>
                       <item.icon />
                       <span>{item.label}</span>
                     </Link>
