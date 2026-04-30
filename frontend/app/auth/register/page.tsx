@@ -21,6 +21,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,6 +36,7 @@ export default function RegisterPage() {
       const res = await api.post("/auth/register", {
         email,
         password,
+        username: username || undefined,
       });
       const token = res.data.access_token;
       const me = await api.get("/auth/me", {
@@ -79,6 +81,16 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="username">用户名（可选）</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="留空则自动从邮箱生成"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div className="space-y-2">

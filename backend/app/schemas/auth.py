@@ -6,6 +6,7 @@ from typing import Optional
 class UserRegister(BaseModel):
     email: EmailStr
     password: str
+    username: Optional[str] = None
     display_name: Optional[str] = None
 
 
