@@ -19,6 +19,10 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
 
+    DOCUMENT_PROVIDER: str = "notion"  # "notion" or "local_file"
+    DOC_SERVER_URL: str = "http://localhost:8002"
+    DOC_SERVER_API_KEY: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -451,18 +451,18 @@ export default function ModelPage() {
             </CardContent>
           </Card>
 
-          {/* 绑定 Notion */}
+          {/* 绑定文档页面 */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Link2 className="h-4 w-4" />
-                绑定 Notion
+                绑定文档页面
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={linkPage} className="space-y-3">
                 <Input
-                  placeholder="Notion Page ID"
+                  placeholder="Page ID（如 model.md 或 Notion Page ID）"
                   value={pageId}
                   onChange={(e) => setPageId(e.target.value)}
                   required

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, Team, TeamMember
+from app.models import Project, Team, TeamMember, ProviderBinding
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.api.auth import get_current_user
 from app.models import User
@@ -18,11 +18,10 @@ def create_project(data: ProjectCreate, team_id: str, current_user: User = Depen
     member = db.query(TeamMember).filter(TeamMember.team_id == team_id, TeamMember.user_id == current_user.id).first()
     if not member:
         raise HTTPException(status_code=403, detail="Not a team member")
-    # Check Notion binding
-    from app.models import NotionBinding
-    binding = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
+    # Check document provider binding
+    binding = db.query(ProviderBinding).filter(ProviderBinding.user_id == current_user.id).first()
     if not binding:
-        raise HTTPException(status_code=400, detail="Please bind Notion account first")
+        raise HTTPException(status_code=400, detail="Please bind a document provider first")
     project = Project(
         team_id=team_id,
         name=data.name,

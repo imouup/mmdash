@@ -33,3 +33,13 @@ node_modules/
 Thumbs.db
 
 logs/
+
+# doc_server data directory
+doc_server/data/
+
+# Runtime uploads and test data
+backend/uploads/
+data/
+package-lock.json
+
+drafts/

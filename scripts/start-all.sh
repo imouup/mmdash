@@ -14,6 +14,19 @@ log_file() {
     echo "$LOG_DIR/$1.log"
 }
 
+# Kill any process listening on a given port
+kill_port() {
+    local port=$1
+    local pname=$2
+    local pids
+    pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        echo "  → 端口 $port 被占用，正在停止旧 $pname 进程..."
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 cleanup() {
     echo ""
     echo "========================================"
@@ -57,7 +70,8 @@ echo "按 Ctrl+C 优雅退出"
 echo ""
 
 # 1. Redis
-echo "[1/5] 启动 Redis..."
+echo "[1/6] 启动 Redis..."
+kill_port 6379 "Redis"
 if [ ! -f "$ROOT_DIR/redis/bin/redis-server" ]; then
     echo "错误: Redis 未安装，请先运行 ./scripts/setup.sh"
     exit 1
@@ -68,7 +82,8 @@ SERVICES+=("Redis")
 sleep 1
 
 # 2. Backend
-echo "[2/5] 启动 Backend (FastAPI)..."
+echo "[2/6] 启动 Backend (FastAPI)..."
+kill_port 8000 "Backend"
 cd "$ROOT_DIR/backend"
 uv run uvicorn app.main:app --reload --port 8000 > "$(log_file backend)" 2>&1 &
 PIDS+=($!)
@@ -76,23 +91,42 @@ SERVICES+=("Backend")
 sleep 1
 
 # 3. Cloud Agent
-echo "[3/5] 启动 Cloud Agent..."
+echo "[3/6] 启动 Cloud Agent..."
+kill_port 8001 "CloudAgent"
 cd "$ROOT_DIR/cloud_agent"
 uv run python main.py > "$(log_file cloud-agent)" 2>&1 &
 PIDS+=($!)
 SERVICES+=("CloudAgent")
 sleep 1
 
-# 4. Local Agent
-echo "[4/5] 启动 Local Agent..."
+# 4. Doc Server
+echo "[4/6] 启动 Doc Server..."
+kill_port 8002 "DocServer"
+cd "$ROOT_DIR/doc_server"
+PYTHONPATH="$ROOT_DIR" uv run uvicorn doc_server.main:app --port 8002 > "$(log_file doc-server)" 2>&1 &
+PIDS+=($!)
+SERVICES+=("DocServer")
+sleep 1
+
+# 5. Local Agent
+echo "[5/6] 启动 Local Agent..."
+kill_port 8765 "LocalAgent"
 cd "$ROOT_DIR/local_agent"
 uv run python main.py > "$(log_file local-agent)" 2>&1 &
 PIDS+=($!)
 SERVICES+=("LocalAgent")
 sleep 1
 
-# 5. Frontend
-echo "[5/5] 启动 Frontend (Next.js)..."
+# 6. Frontend
+echo "[6/6] 启动 Frontend (Next.js)..."
+kill_port 3000 "Frontend"
+# Also clean up any zombie Next.js dev servers for this project
+for pid in $(ps aux | grep "next" | grep -v grep | awk '{print $2}'); do
+    cwd=$(readlink /proc/$pid/cwd 2>/dev/null || true)
+    if [[ "$cwd" == *"mmdash/frontend"* ]]; then
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+done
 cd "$ROOT_DIR/frontend"
 npm run dev > "$(log_file frontend)" 2>&1 &
 PIDS+=($!)
@@ -107,6 +141,7 @@ echo ""
 echo "  Redis:       http://localhost:6379"
 echo "  Backend:     http://localhost:8000"
 echo "  CloudAgent:  http://localhost:8001"
+echo "  DocServer:   http://localhost:8002"
 echo "  LocalAgent:  ws://127.0.0.1:8765"
 echo "  Frontend:    http://localhost:3000"
 echo ""

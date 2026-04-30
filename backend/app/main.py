@@ -2,12 +2,55 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.api import auth, teams, projects, home, timeline, model, model_version, git
+
+# Import provider modules to trigger registration
+from app.services import notion_provider, local_file_provider
 
 settings = get_settings()
 
 Base.metadata.create_all(bind=engine)
+
+
+# ─── One-time migration: notion_bindings → provider_bindings ─────────────────
+def _migrate_notion_bindings():
+    """Migrate legacy NotionBinding data to new ProviderBinding table."""
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    if "notion_bindings" not in tables or "provider_bindings" not in tables:
+        return
+
+    db = SessionLocal()
+    try:
+        from app.models import NotionBinding, ProviderBinding
+        # Check if migration already done
+        provider_count = db.query(ProviderBinding).count()
+        if provider_count > 0:
+            return
+
+        notion_bindings = db.query(NotionBinding).all()
+        for nb in notion_bindings:
+            pb = ProviderBinding(
+                id=nb.id,
+                user_id=nb.user_id,
+                provider_type="notion",
+                credentials=__import__("json").dumps({"access_token": nb.access_token}),
+                workspace_id=nb.workspace_id,
+                workspace_name=nb.workspace_name,
+                created_at=nb.created_at,
+            )
+            db.add(pb)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+_migrate_notion_bindings()
 
 app = FastAPI(
     title=settings.APP_NAME,

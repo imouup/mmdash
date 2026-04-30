@@ -40,7 +40,7 @@ fi
 echo ""
 echo "[3/5] 创建 Python 虚拟环境并同步依赖..."
 
-for module in backend cloud_agent local_agent; do
+for module in backend cloud_agent local_agent doc_server; do
     echo "       → $module"
     cd "$ROOT_DIR/$module"
     uv sync
@@ -71,5 +71,6 @@ echo "   Redis:      ./scripts/start-redis.sh"
 echo "   Backend:    cd backend && uv run uvicorn app.main:app --reload"
 echo "   CloudAgent: cd cloud_agent && uv run python main.py"
 echo "   LocalAgent: cd local_agent && uv run python main.py"
+echo "   DocServer:  cd doc_server && uv run uvicorn main:app --port 8002"
 echo "   Frontend:   cd frontend && npm run dev"
 echo ""

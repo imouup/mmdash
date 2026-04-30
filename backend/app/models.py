@@ -23,6 +23,7 @@ class User(Base):
     teams = relationship("TeamMember", back_populates="user", cascade="all, delete-orphan")
     owned_teams = relationship("Team", back_populates="owner", foreign_keys="Team.owner_id")
     notion_bindings = relationship("NotionBinding", back_populates="user", cascade="all, delete-orphan")
+    provider_bindings = relationship("ProviderBinding", back_populates="user", cascade="all, delete-orphan")
 
 
 class Team(Base):
@@ -63,6 +64,20 @@ class NotionBinding(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="notion_bindings")
+
+
+class ProviderBinding(Base):
+    __tablename__ = "provider_bindings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    provider_type = Column(String(50), nullable=False, default="notion")
+    credentials = Column(Text, nullable=False)  # JSON: {"access_token": "..."} or {"api_key": "..."}
+    workspace_id = Column(String(255), nullable=True)
+    workspace_name = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="provider_bindings")
 
 
 class Project(Base):

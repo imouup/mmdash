@@ -1,29 +1,30 @@
 import secrets
 from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database import get_db
-from app.models import User, NotionBinding
-from app.schemas.auth import UserRegister, UserLogin, UserResponse, TokenResponse, NotionAuthUrl, NotionCallback
+from app.models import User, NotionBinding, ProviderBinding
+from app.schemas.auth import UserRegister, UserLogin, UserResponse, TokenResponse, ProviderAuthUrl, ProviderCallback
+from app.services.document_provider import get_provider
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 settings = get_settings()
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -87,40 +88,54 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/notion/url", response_model=NotionAuthUrl)
-def get_notion_auth_url(current_user: User = Depends(get_current_user)):
-    state = secrets.token_urlsafe(32)
-    auth_url = (
-        f"https://api.notion.com/v1/oauth/authorize?"
-        f"client_id={settings.NOTION_CLIENT_ID}&"
-        f"redirect_uri={settings.NOTION_REDIRECT_URI}&"
-        f"response_type=code&"
-        f"state={state}"
-    )
+def _get_user_provider_binding(db: Session, user_id: str) -> Optional[ProviderBinding]:
+    """Get the active provider binding for a user."""
+    return db.query(ProviderBinding).filter(ProviderBinding.user_id == user_id).first()
+
+
+@router.get("/provider/url", response_model=ProviderAuthUrl)
+def get_provider_auth_url(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    binding = _get_user_provider_binding(db, current_user.id)
+    provider_type = binding.provider_type if binding else settings.DOCUMENT_PROVIDER
+    provider = get_provider(provider_type)
+    auth_url = provider.get_auth_url()
+    if not auth_url:
+        raise HTTPException(status_code=400, detail="This provider does not require OAuth")
     return {"auth_url": auth_url}
 
 
-from app.services.notion import exchange_code_for_token
-
-@router.post("/notion/callback")
-async def notion_callback(data: NotionCallback, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.post("/provider/callback")
+async def provider_callback(data: ProviderCallback, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    binding = _get_user_provider_binding(db, current_user.id)
+    provider_type = binding.provider_type if binding else settings.DOCUMENT_PROVIDER
+    provider = get_provider(provider_type)
     try:
-        token_data = await exchange_code_for_token(data.code)
-        access_token = token_data.get("access_token")
-        workspace_id = token_data.get("workspace_id")
-        workspace_name = token_data.get("workspace_name")
+        creds = await provider.exchange_auth_code(data.code)
         # Remove old binding if exists
-        old = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
+        old = db.query(ProviderBinding).filter(ProviderBinding.user_id == current_user.id).first()
         if old:
             db.delete(old)
-        binding = NotionBinding(
+        new_binding = ProviderBinding(
             user_id=current_user.id,
-            access_token=access_token,
-            workspace_id=workspace_id,
-            workspace_name=workspace_name,
+            provider_type=provider_type,
+            credentials=__import__("json").dumps(creds),
+            workspace_id=creds.get("workspace_id"),
+            workspace_name=creds.get("workspace_name"),
         )
-        db.add(binding)
+        db.add(new_binding)
         db.commit()
-        return {"status": "success"}
+        return {"status": "success", "provider_type": provider_type}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Notion auth failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Provider auth failed: {str(e)}")
+
+
+# ─── Backward-compatible Notion endpoints ─────────────────────────────────────
+
+@router.get("/notion/url", response_model=ProviderAuthUrl)
+def get_notion_auth_url_compat(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return get_provider_auth_url(current_user, db)
+
+
+@router.post("/notion/callback")
+async def notion_callback_compat(data: ProviderCallback, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return await provider_callback(data, current_user, db)

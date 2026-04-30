@@ -1,19 +1,27 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, TeamMember, NotionBinding
+from app.models import Project, TeamMember, ProviderBinding
 from app.api.auth import get_current_user
 from app.models import User
-from app.services.notion_fetch import fetch_notion_page_content, notion_blocks_to_markdown
-from app.services.cache import get_cached_notion_page, set_cached_notion_page
+from app.services.document_provider import get_provider
+from app.services.cache import get_cached_page, set_cached_page
 from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula, find_errors
 
 router = APIRouter()
 
 
-@router.get("/{project_id}/content")
-async def get_model_content(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def _get_binding(db: Session, user_id: str) -> ProviderBinding:
+    binding = db.query(ProviderBinding).filter(ProviderBinding.user_id == user_id).first()
+    if not binding:
+        raise HTTPException(status_code=400, detail="Please bind a document provider first")
+    return binding
+
+
+async def _fetch_model_content(project_id: str, current_user: User, db: Session) -> dict:
+    """Fetch model content from the configured document provider."""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -23,21 +31,70 @@ async def get_model_content(project_id: str, current_user: User = Depends(get_cu
     if not project.model_data_page_id:
         raise HTTPException(status_code=400, detail="No model page linked to this project")
 
-    binding = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
-    if not binding:
-        raise HTTPException(status_code=400, detail="Notion not bound")
+    binding = _get_binding(db, current_user.id)
+    provider = get_provider(binding.provider_type)
+    credentials = json.loads(binding.credentials)
+
+    # Try cache first
+    cached = get_cached_page(binding.provider_type, project.model_data_page_id)
+    if cached:
+        return {"page_id": project.model_data_page_id, "content": cached, "from_cache": True}
 
     try:
-        content = await fetch_notion_page_content(project.model_data_page_id, binding.access_token)
-        markdown = notion_blocks_to_markdown(content.get("blocks", []))
-        return {"page_id": project.model_data_page_id, "markdown": markdown, "blocks": content.get("blocks", [])}
+        content = await provider.fetch_page_content(project.model_data_page_id, credentials)
+        set_cached_page(binding.provider_type, project.model_data_page_id, content)
+        return {"page_id": project.model_data_page_id, "content": content}
     except Exception as e:
         # Fallback to cache if available
-        cached = get_cached_notion_page(project.model_data_page_id)
+        cached = get_cached_page(binding.provider_type, project.model_data_page_id)
         if cached:
-            markdown = notion_blocks_to_markdown(cached.get("blocks", []))
-            return {"page_id": project.model_data_page_id, "markdown": markdown, "blocks": cached.get("blocks", []), "from_cache": True}
-        raise HTTPException(status_code=500, detail=f"Failed to fetch Notion content: {str(e)}")
+            return {"page_id": project.model_data_page_id, "content": cached, "from_cache": True}
+        raise HTTPException(status_code=500, detail=f"Failed to fetch content: {str(e)}")
+
+
+def _blocks_to_markdown(blocks: list) -> str:
+    """Convert blocks (Notion-style or doc_server-style) to Markdown."""
+    md_lines = []
+    for block in blocks:
+        block_type = block.get("type")
+        if block_type == "paragraph":
+            md_lines.append(block.get("content", ""))
+        elif block_type == "heading_1":
+            md_lines.append(f"# {block.get('content', '')}")
+        elif block_type == "heading_2":
+            md_lines.append(f"## {block.get('content', '')}")
+        elif block_type == "heading_3":
+            md_lines.append(f"### {block.get('content', '')}")
+        elif block_type == "bulleted_list_item":
+            md_lines.append(f"- {block.get('content', '')}")
+        elif block_type == "numbered_list_item":
+            md_lines.append(f"1. {block.get('content', '')}")
+        elif block_type == "code":
+            text = block.get("content", "")
+            lang = block.get("language", "")
+            md_lines.append(f"```{lang}\n{text}\n```")
+        elif block_type == "equation":
+            text = block.get("content", "")
+            md_lines.append(f"$$ {text} $$")
+        elif block_type == "quote":
+            md_lines.append(f"> {block.get('content', '')}")
+        elif block_type == "divider":
+            md_lines.append("---")
+    return "\n\n".join(md_lines)
+
+
+@router.get("/{project_id}/content")
+async def get_model_content(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    result = await _fetch_model_content(project_id, current_user, db)
+    content = result["content"]
+    blocks = content.get("blocks", [])
+    markdown = _blocks_to_markdown(blocks)
+    return {
+        "page_id": result["page_id"],
+        "markdown": markdown,
+        "blocks": blocks,
+        "from_cache": result.get("from_cache", False),
+    }
 
 
 @router.get("/{project_id}/export/md")

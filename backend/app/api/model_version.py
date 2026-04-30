@@ -1,13 +1,41 @@
 import difflib
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Project, TeamMember, NotionBinding, ModelSnapshot, User
+from app.models import Project, TeamMember, ProviderBinding, ModelSnapshot, User
 from app.api.auth import get_current_user
-from app.services.notion_fetch import fetch_notion_page_content, notion_blocks_to_markdown
+from app.services.document_provider import get_provider
+from app.services.cache import get_cached_page
+from app.api.model import _blocks_to_markdown
 
 router = APIRouter()
+
+
+def _get_binding(db: Session, user_id: str) -> ProviderBinding:
+    binding = db.query(ProviderBinding).filter(ProviderBinding.user_id == user_id).first()
+    if not binding:
+        raise HTTPException(status_code=400, detail="Please bind a document provider first")
+    return binding
+
+
+async def _fetch_current_markdown(project: Project, binding: ProviderBinding) -> str:
+    """Fetch current markdown from the document provider."""
+    if not project.model_data_page_id:
+        return ""
+    provider = get_provider(binding.provider_type)
+    credentials = json.loads(binding.credentials)
+
+    cached = get_cached_page(binding.provider_type, project.model_data_page_id)
+    if cached:
+        return _blocks_to_markdown(cached.get("blocks", []))
+
+    try:
+        content = await provider.fetch_page_content(project.model_data_page_id, credentials)
+        return _blocks_to_markdown(content.get("blocks", []))
+    except Exception:
+        return ""
 
 
 @router.post("/{project_id}/commit")
@@ -21,12 +49,8 @@ async def commit_model(project_id: str, message: str, current_user: User = Depen
     if not project.model_data_page_id:
         raise HTTPException(status_code=400, detail="No model page linked")
 
-    binding = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
-    if not binding:
-        raise HTTPException(status_code=400, detail="Notion not bound")
-
-    content = await fetch_notion_page_content(project.model_data_page_id, binding.access_token)
-    markdown = notion_blocks_to_markdown(content.get("blocks", []))
+    binding = _get_binding(db, current_user.id)
+    markdown = await _fetch_current_markdown(project, binding)
 
     snapshot = ModelSnapshot(
         project_id=project_id,
@@ -110,12 +134,11 @@ async def rollback_model(project_id: str, snapshot_id: str, current_user: User =
         raise HTTPException(status_code=404, detail="Snapshot not found")
 
     # Backup current state before rollback
-    binding = db.query(NotionBinding).filter(NotionBinding.user_id == current_user.id).first()
+    binding = db.query(ProviderBinding).filter(ProviderBinding.user_id == current_user.id).first()
     current_markdown = ""
     if binding and project.model_data_page_id:
         try:
-            content = await fetch_notion_page_content(project.model_data_page_id, binding.access_token)
-            current_markdown = notion_blocks_to_markdown(content.get("blocks", []))
+            current_markdown = await _fetch_current_markdown(project, binding)
         except Exception:
             pass
 
