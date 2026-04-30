@@ -22,6 +22,7 @@ uv.lock
 # Node
 node_modules/
 .next/
+*.tsbuildinfo
 
 # IDE
 .vscode/
