@@ -23,7 +23,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
 import {
@@ -54,8 +53,7 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarRail />
+    <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

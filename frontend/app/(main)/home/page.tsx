@@ -311,7 +311,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {/* 左侧：团队和项目 */}
         <div className="space-y-6">
           {/* 团队选择 */}
@@ -487,7 +487,7 @@ export default function HomePage() {
         </div>
 
         {/* 中间：题目和 TODO */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 xl:col-span-3 space-y-6">
           {/* 题目上传 */}
           <Card>
             <CardHeader className="pb-3">

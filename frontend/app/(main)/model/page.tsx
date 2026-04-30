@@ -399,7 +399,7 @@ export default function ModelPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {/* 左侧 */}
         <div className="space-y-6">
           {/* 团队/项目选择 */}
@@ -641,7 +641,7 @@ export default function ModelPage() {
         </div>
 
         {/* 右侧：内容区 */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 xl:col-span-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="content">内容</TabsTrigger>

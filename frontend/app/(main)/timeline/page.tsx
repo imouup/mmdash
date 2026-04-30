@@ -307,7 +307,7 @@ export default function TimelinePage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {/* 左侧：选择器 */}
         <div className="space-y-6">
           <Card>
@@ -369,7 +369,7 @@ export default function TimelinePage() {
         </div>
 
         {/* 右侧：日程表 */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 xl:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

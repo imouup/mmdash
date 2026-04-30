@@ -1,4 +1,5 @@
-import secrets
+import random
+import string
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,9 +12,14 @@ from app.api.auth import get_current_user
 router = APIRouter()
 
 
+def _generate_invite_code() -> str:
+    """Generate a 6-char uppercase alphanumeric invite code."""
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
 @router.post("", response_model=TeamResponse)
 def create_team(data: TeamCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    invite_code = secrets.token_urlsafe(16)
+    invite_code = _generate_invite_code()
     team = Team(
         name=data.name,
         owner_id=current_user.id,

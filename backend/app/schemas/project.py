@@ -10,6 +10,8 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    model_config = {"protected_namespaces": (), "from_attributes": True}
+
     id: str
     team_id: str
     name: str
@@ -18,6 +20,3 @@ class ProjectResponse(BaseModel):
     model_data_page_id: Optional[str]
     git_remote_url: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True

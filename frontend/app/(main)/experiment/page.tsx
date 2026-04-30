@@ -411,7 +411,7 @@ export default function ExperimentPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {/* 左侧 */}
         <div className="space-y-6">
           {/* Agent 状态 */}
@@ -512,9 +512,9 @@ export default function ExperimentPage() {
         </div>
 
         {/* 右侧 */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 xl:col-span-3">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
+            <TabsList className="w-full mb-4">
               <TabsTrigger value="run">
                 <Play className="h-4 w-4 mr-1" />
                 运行实验
