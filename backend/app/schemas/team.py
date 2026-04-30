@@ -7,6 +7,10 @@ class TeamCreate(BaseModel):
     name: str
 
 
+class TeamUpdate(BaseModel):
+    name: str
+
+
 class TeamResponse(BaseModel):
     id: str
     name: str

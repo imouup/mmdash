@@ -22,7 +22,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -36,7 +35,6 @@ export default function RegisterPage() {
       const res = await api.post("/auth/register", {
         email,
         password,
-        display_name: displayName || undefined,
       });
       const token = res.data.access_token;
       const me = await api.get("/auth/me", {
@@ -81,16 +79,6 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="displayName">昵称</Label>
-              <Input
-                id="displayName"
-                type="text"
-                placeholder="您的昵称"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
               />
             </div>
             <div className="space-y-2">

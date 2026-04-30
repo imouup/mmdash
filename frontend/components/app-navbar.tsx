@@ -17,6 +17,7 @@ const pageTitles: Record<string, string> = {
   "/timeline": "时间线",
   "/model": "模型",
   "/experiment": "实验和求解",
+  "/settings": "设置",
 }
 
 export function AppNavbar() {

@@ -7,6 +7,7 @@ import {
   CalendarDays,
   FileText,
   FlaskConical,
+  Settings,
   LogOut,
   ChevronsUpDown,
 } from "lucide-react"
@@ -29,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -38,6 +40,7 @@ const navItems = [
   { href: "/timeline", label: "时间线", icon: CalendarDays },
   { href: "/model", label: "模型", icon: FileText },
   { href: "/experiment", label: "实验和求解", icon: FlaskConical },
+  { href: "/settings", label: "设置", icon: Settings },
 ]
 
 export function AppSidebar() {
@@ -131,6 +134,11 @@ export function AppSidebar() {
                 side="top"
                 className="w-[--radix-popper-anchor-width]"
               >
+                <DropdownMenuItem onClick={() => router.push("/settings")}>
+                  <Settings className="mr-2 size-4" />
+                  设置
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 size-4" />
                   退出登录

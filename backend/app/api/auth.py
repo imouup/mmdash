@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.database import get_db
 from app.models import User, NotionBinding, ProviderBinding
-from app.schemas.auth import UserRegister, UserLogin, UserResponse, TokenResponse, ProviderAuthUrl, ProviderCallback
+from app.schemas.auth import (
+    UserRegister, UserLogin, UserResponse, TokenResponse,
+    ProviderAuthUrl, ProviderCallback, ProviderSwitchRequest,
+    UserUpdate, ChangePasswordRequest,
+)
 from app.services.document_provider import get_provider
 
 router = APIRouter()
@@ -57,13 +61,25 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def _generate_username(email: str, db: Session) -> str:
+    prefix = email.split("@")[0]
+    username = prefix
+    suffix = 1
+    while db.query(User).filter(User.username == username).first():
+        username = f"{prefix}{suffix}"
+        suffix += 1
+    return username
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    username = _generate_username(user_data.email, db)
     user = User(
         email=user_data.email,
+        username=username,
         hashed_password=get_password_hash(user_data.password),
         display_name=user_data.display_name,
     )
@@ -76,9 +92,11 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
+    user = db.query(User).filter(
+        (User.email == form_data.username) | (User.username == form_data.username)
+    ).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        raise HTTPException(status_code=400, detail="Incorrect username/email or password")
     token = create_access_token({"sub": user.id})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -86,6 +104,31 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(data: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if data.username is not None:
+        existing = db.query(User).filter(
+            User.username == data.username, User.id != current_user.id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        current_user.username = data.username
+    if data.display_name is not None:
+        current_user.display_name = data.display_name
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/change-password")
+def change_password(data: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return {"status": "success"}
 
 
 def _get_user_provider_binding(db: Session, user_id: str) -> Optional[ProviderBinding]:
@@ -127,6 +170,23 @@ async def provider_callback(data: ProviderCallback, current_user: User = Depends
         return {"status": "success", "provider_type": provider_type}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Provider auth failed: {str(e)}")
+
+
+@router.post("/provider/switch")
+def switch_provider(data: ProviderSwitchRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Remove old binding
+    old = db.query(ProviderBinding).filter(ProviderBinding.user_id == current_user.id).first()
+    if old:
+        db.delete(old)
+    # Create new binding with empty credentials
+    new_binding = ProviderBinding(
+        user_id=current_user.id,
+        provider_type=data.provider_type,
+        credentials="{}",
+    )
+    db.add(new_binding)
+    db.commit()
+    return {"status": "switched", "provider_type": data.provider_type}
 
 
 # ─── Backward-compatible Notion endpoints ─────────────────────────────────────

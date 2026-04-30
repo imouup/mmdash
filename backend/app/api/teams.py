@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Team, TeamMember, User
-from app.schemas.team import TeamCreate, TeamResponse, TeamMemberResponse, JoinTeamRequest
+from app.schemas.team import TeamCreate, TeamUpdate, TeamResponse, TeamMemberResponse, JoinTeamRequest
 from app.api.auth import get_current_user
 
 router = APIRouter()
@@ -64,6 +64,34 @@ def get_team(team_id: str, current_user: User = Depends(get_current_user), db: S
     if not member:
         raise HTTPException(status_code=403, detail="Not a team member")
     return team
+
+
+@router.put("/{team_id}", response_model=TeamResponse)
+def update_team(team_id: str, data: TeamUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if team.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner can rename team")
+    team.name = data.name
+    db.commit()
+    db.refresh(team)
+    return team
+
+
+@router.post("/{team_id}/leave")
+def leave_team(team_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    if team.owner_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner cannot leave team, please delete it instead")
+    member = db.query(TeamMember).filter(TeamMember.team_id == team_id, TeamMember.user_id == current_user.id).first()
+    if not member:
+        raise HTTPException(status_code=400, detail="You are not a member of this team")
+    db.delete(member)
+    db.commit()
+    return {"status": "left"}
 
 
 @router.get("/{team_id}/members", response_model=list[TeamMemberResponse])

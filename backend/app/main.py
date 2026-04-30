@@ -52,6 +52,37 @@ def _migrate_notion_bindings():
 
 _migrate_notion_bindings()
 
+
+# ─── One-time migration: populate username for existing users ─────────────────
+def _migrate_usernames():
+    """Populate username field for existing users from email prefix."""
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    if "users" not in tables:
+        return
+
+    db = SessionLocal()
+    try:
+        from app.models import User
+        users = db.query(User).filter(User.username.is_(None)).all()
+        for user in users:
+            prefix = user.email.split("@")[0]
+            username = prefix
+            suffix = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{prefix}{suffix}"
+                suffix += 1
+            user.username = username
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+_migrate_usernames()
+
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,

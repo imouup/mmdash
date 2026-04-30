@@ -14,9 +14,20 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    username: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
+    username: Optional[str]
     display_name: Optional[str]
     created_at: datetime
 
@@ -36,6 +47,10 @@ class ProviderAuthUrl(BaseModel):
 
 class ProviderCallback(BaseModel):
     code: str
+
+
+class ProviderSwitchRequest(BaseModel):
+    provider_type: str  # "notion" or "local_file"
 
 
 # Backward-compatible aliases

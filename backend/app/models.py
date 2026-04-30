@@ -15,6 +15,7 @@ class User(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(100), unique=True, nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
     display_name = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
