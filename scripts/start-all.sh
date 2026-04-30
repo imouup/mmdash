@@ -85,6 +85,9 @@ sleep 1
 echo "[2/6] 启动 Backend (FastAPI)..."
 kill_port 8000 "Backend"
 cd "$ROOT_DIR/backend"
+echo "  → 运行数据库迁移 (alembic upgrade head)..."
+uv run alembic upgrade head > "$(log_file backend-alembic)" 2>&1
+echo "  → 启动 FastAPI 服务..."
 uv run uvicorn app.main:app --reload --port 8000 > "$(log_file backend)" 2>&1 &
 PIDS+=($!)
 SERVICES+=("Backend")

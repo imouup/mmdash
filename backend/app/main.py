@@ -10,9 +10,6 @@ from app.services import notion_provider, local_file_provider
 
 settings = get_settings()
 
-Base.metadata.create_all(bind=engine)
-
-
 # ─── One-time migration: notion_bindings → provider_bindings ─────────────────
 def _migrate_notion_bindings():
     """Migrate legacy NotionBinding data to new ProviderBinding table."""
