@@ -1,5 +1,6 @@
 # SQLite database
 backend/mmdash.db
+backend/app.db
 
 # Redis local installation
 redis/bin/
