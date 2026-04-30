@@ -175,7 +175,10 @@ export default function TimelinePage() {
 
   const createEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProject) return;
+    if (!selectedProject) {
+      toast.error("请先选择项目");
+      return;
+    }
     try {
       await api.post(`/timeline/${selectedProject}/events`, null, {
         params: {
@@ -236,7 +239,7 @@ export default function TimelinePage() {
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={projects.length === 0}>
               <Plus className="h-4 w-4 mr-1" />
               添加日程
             </Button>
