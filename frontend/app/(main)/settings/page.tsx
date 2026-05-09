@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Server,
   BookOpen,
+  Zap,
 } from "lucide-react"
+import { ModelSelector } from "@/components/llm/ModelSelector"
 import api from "@/lib/api"
 import { useAuthStore } from "@/stores/auth"
 import { Button } from "@/components/ui/button"
@@ -311,7 +313,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="profile">
             <User className="mr-2 size-4" />
             个人资料
@@ -323,6 +325,10 @@ export default function SettingsPage() {
           <TabsTrigger value="provider">
             <Database className="mr-2 size-4" />
             文档后端
+          </TabsTrigger>
+          <TabsTrigger value="llm">
+            <Zap className="mr-2 size-4" />
+            LLM 模型
           </TabsTrigger>
         </TabsList>
 
@@ -763,6 +769,11 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ─── LLM Tab ───────────────────────────────────────────── */}
+        <TabsContent value="llm" className="space-y-6">
+          <ModelSelector />
         </TabsContent>
       </Tabs>
     </div>
