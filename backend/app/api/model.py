@@ -10,6 +10,7 @@ from app.api.auth import get_current_user
 from app.models import User
 from app.services.document_provider import get_provider
 from app.services.cache import get_cached_page, set_cached_page
+from app.services.markdown_blocks import blocks_to_markdown as _blocks_to_markdown
 from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula, find_errors
 
 router = APIRouter()
@@ -71,37 +72,6 @@ async def _fetch_model_content(project_id: str, current_user: User, db: Session,
         if cached:
             return {"page_id": project.model_data_page_id, "content": cached, "from_cache": True}
         raise HTTPException(status_code=500, detail=f"Failed to fetch content: {str(e)}")
-
-
-def _blocks_to_markdown(blocks: list) -> str:
-    """Convert blocks (Notion-style or doc_server-style) to Markdown."""
-    md_lines = []
-    for block in blocks:
-        block_type = block.get("type")
-        if block_type == "paragraph":
-            md_lines.append(block.get("content", ""))
-        elif block_type == "heading_1":
-            md_lines.append(f"# {block.get('content', '')}")
-        elif block_type == "heading_2":
-            md_lines.append(f"## {block.get('content', '')}")
-        elif block_type == "heading_3":
-            md_lines.append(f"### {block.get('content', '')}")
-        elif block_type == "bulleted_list_item":
-            md_lines.append(f"- {block.get('content', '')}")
-        elif block_type == "numbered_list_item":
-            md_lines.append(f"1. {block.get('content', '')}")
-        elif block_type == "code":
-            text = block.get("content", "")
-            lang = block.get("language", "")
-            md_lines.append(f"```{lang}\n{text}\n```")
-        elif block_type == "equation":
-            text = block.get("content", "")
-            md_lines.append(f"$$ {text} $$")
-        elif block_type == "quote":
-            md_lines.append(f"> {block.get('content', '')}")
-        elif block_type == "divider":
-            md_lines.append("---")
-    return "\n\n".join(md_lines)
 
 
 @router.get("/{project_id}/content")

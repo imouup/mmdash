@@ -24,7 +24,6 @@ const FormulaExplanationRenderer = dynamic(() => import("@/components/model/mark
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -71,7 +70,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   FileText,
@@ -84,7 +82,6 @@ import {
   Wand2,
   Download,
   Users,
-  FolderOpen,
   RotateCcw,
   Loader2,
   AlertCircle,
@@ -99,6 +96,8 @@ interface Team {
 interface Project {
   id: string;
   name: string;
+  description: string | null;
+  git_remote_url: string | null;
   model_data_page_id: string | null;
 }
 
@@ -120,6 +119,26 @@ interface ErrorItem {
   excerpt: string;
   description: string;
   severity: "warning" | "error";
+}
+
+interface RollbackPreview {
+  snapshot: {
+    id: string;
+    commit_message: string;
+    user_email: string;
+    created_at: string;
+  };
+  current: {
+    page_id: string | null;
+    markdown: string;
+  };
+  target: {
+    page_id: string;
+    markdown: string;
+  };
+  diff: string;
+  can_write: boolean;
+  provider_type: string | null;
 }
 
 export default function ModelPage() {
@@ -149,6 +168,10 @@ export default function ModelPage() {
 
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview | null>(null);
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false);
+  const [rollbackLoadingId, setRollbackLoadingId] = useState<string | null>(null);
+  const [rollbackApplying, setRollbackApplying] = useState(false);
 
   const dataCache = useDataCache();
 
@@ -253,6 +276,15 @@ export default function ModelPage() {
     }
   };
 
+  const updateCurrentProjectPage = (pageId: string) => {
+    if (!selectedTeam || !selectedProject) return;
+    const updatedProjects = projects.map((p) =>
+      p.id === selectedProject ? { ...p, model_data_page_id: pageId } : p
+    );
+    setProjects(updatedProjects);
+    dataCache.setProjects(selectedTeam, updatedProjects);
+  };
+
   const linkPage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject || !pageId) return;
@@ -260,7 +292,11 @@ export default function ModelPage() {
       await api.post(`/model/${selectedProject}/link`, null, {
         params: { page_id: pageId },
       });
-      fetchProjects(selectedTeam);
+      updateCurrentProjectPage(pageId);
+      setMarkdown("");
+      setEditContent("");
+      setEditMode(true);
+      setActiveTab("content");
       setPageId("");
       toast.success("页面已绑定");
     } catch (err: any) {
@@ -269,7 +305,7 @@ export default function ModelPage() {
   };
 
   const saveContent = async () => {
-    if (!selectedProject || !editContent) return;
+    if (!selectedProject) return;
     try {
       await api.post(`/model/${selectedProject}/content`, {
         markdown: editContent,
@@ -287,10 +323,14 @@ export default function ModelPage() {
     const proj = projects.find((p) => p.id === selectedProject);
     const title = proj ? `${proj.name} 模型` : "新模型文档";
     try {
-      await api.post(`/model/${selectedProject}/create-page`, {
+      const res = await api.post(`/model/${selectedProject}/create-page`, {
         title,
       });
-      fetchProjects(selectedTeam);
+      updateCurrentProjectPage(res.data.page_id);
+      setMarkdown("");
+      setEditContent("");
+      setEditMode(true);
+      setActiveTab("content");
       toast.success("文档已创建");
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "创建失败");
@@ -408,16 +448,38 @@ export default function ModelPage() {
     setDismissedErrors((prev) => new Set(prev).add(index));
   };
 
-  const rollback = async (snapshotId: string) => {
+  const openRollbackPreview = async (snapshotId: string) => {
     if (!selectedProject) return;
+    setRollbackLoadingId(snapshotId);
     try {
-      await api.post(`/model-version/${selectedProject}/rollback`, null, {
+      const res = await api.get(`/model-version/${selectedProject}/rollback-preview`, {
         params: { snapshot_id: snapshotId },
       });
+      setRollbackPreview(res.data);
+      setRollbackDialogOpen(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "回滚预览失败");
+    } finally {
+      setRollbackLoadingId(null);
+    }
+  };
+
+  const rollback = async () => {
+    if (!selectedProject || !rollbackPreview) return;
+    setRollbackApplying(true);
+    try {
+      await api.post(`/model-version/${selectedProject}/rollback`, null, {
+        params: { snapshot_id: rollbackPreview.snapshot.id },
+      });
+      setMarkdown(rollbackPreview.target.markdown || "");
       fetchCommits(selectedProject);
-      toast.success("回滚准备完成，请检查 Notion 页面");
+      setRollbackDialogOpen(false);
+      setRollbackPreview(null);
+      toast.success("已回滚并写回文档");
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "回滚失败");
+    } finally {
+      setRollbackApplying(false);
     }
   };
 
@@ -546,28 +608,20 @@ export default function ModelPage() {
                       <div className="text-xs text-muted-foreground">
                         {c.user_email} · {new Date(c.created_at).toLocaleDateString()}
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="link" size="sm" className="h-auto p-0 text-xs">
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            回滚
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>确认回滚</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              确定要回滚到「{c.commit_message}」吗？当前内容将自动备份。
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => rollback(c.id)}>
-                              确认回滚
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => openRollbackPreview(c.id)}
+                        disabled={rollbackLoadingId === c.id}
+                      >
+                        {rollbackLoadingId === c.id ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                        )}
+                        回滚
+                      </Button>
                     </div>
                   ))}
                   {commits.length === 0 && (
@@ -945,6 +999,69 @@ export default function ModelPage() {
           </Tabs>
         </div>
       </div>
+      <AlertDialog
+        open={rollbackDialogOpen}
+        onOpenChange={(open) => {
+          setRollbackDialogOpen(open);
+          if (!open) {
+            setRollbackPreview(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认回滚</AlertDialogTitle>
+            <AlertDialogDescription>
+              当前内容将自动备份，然后写回所选版本。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {rollbackPreview && (
+            <div className="space-y-4">
+              <div className="grid gap-3 text-sm md:grid-cols-2">
+                <div className="rounded-md border p-3">
+                  <div className="text-muted-foreground">目标版本</div>
+                  <div className="font-medium">{rollbackPreview.snapshot.commit_message}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {rollbackPreview.snapshot.user_email} · {new Date(rollbackPreview.snapshot.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-muted-foreground">文档后端</div>
+                  <div className="font-medium">{rollbackPreview.provider_type || "未绑定"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {rollbackPreview.can_write ? "可写回" : "当前后端不支持写回"}
+                  </div>
+                </div>
+              </div>
+              {!rollbackPreview.can_write && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>无法写回</AlertTitle>
+                  <AlertDescription>当前文档后端不支持回滚写回。</AlertDescription>
+                </Alert>
+              )}
+              <ScrollArea className="h-72 rounded-md border bg-muted p-3">
+                <pre className="whitespace-pre-wrap break-words text-xs font-mono">
+                  {rollbackPreview.diff || "当前内容与目标版本一致。"}
+                </pre>
+              </ScrollArea>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rollbackApplying}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                rollback();
+              }}
+              disabled={!rollbackPreview?.can_write || rollbackApplying}
+            >
+              {rollbackApplying && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              确认写回
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
