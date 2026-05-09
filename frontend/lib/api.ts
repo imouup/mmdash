@@ -74,6 +74,21 @@ export const llmApi = {
     });
     return res.data;
   },
+
+  async getPromptSettings(teamId: string) {
+    const res = await api.get("/llm/prompts", {
+      params: { team_id: teamId },
+    });
+    return res.data;
+  },
+
+  async updatePromptSettings(teamId: string, prompts: Record<string, string>) {
+    const res = await api.put("/llm/prompts", {
+      team_id: teamId,
+      prompts,
+    });
+    return res.data;
+  },
 };
 
 export default api;

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.database import get_db
 from app.models import ProviderBinding, Team, TeamMember
+from app.services.llm.prompts import get_team_llm_prompts, normalize_llm_prompts, serialize_llm_prompts
 from app.services.llm.factory import get_provider_for_binding
 
 router = APIRouter()
@@ -24,6 +25,11 @@ class SelectionRequest(BaseModel):
     selected_model: str
 
 
+class PromptSettingsRequest(BaseModel):
+    team_id: str
+    prompts: dict
+
+
 def _ensure_team_member(team_id: str, user_id: str, db: Session) -> Team:
     team = db.query(Team).filter(Team.id == team_id).first()
     if not team:
@@ -35,6 +41,17 @@ def _ensure_team_member(team_id: str, user_id: str, db: Session) -> Team:
     if not member:
         raise HTTPException(status_code=403, detail="not a team member")
     return team
+
+
+def _get_team_member(team_id: str, user_id: str, db: Session) -> TeamMember | None:
+    return db.query(TeamMember).filter(
+        TeamMember.team_id == team_id,
+        TeamMember.user_id == user_id,
+    ).first()
+
+
+def _is_manager(member: TeamMember | None) -> bool:
+    return bool(member and member.role in {"owner", "admin"})
 
 
 @router.get("/providers")
@@ -119,8 +136,9 @@ def create_binding(data: BindingCreate, current_user=Depends(get_current_user), 
     # If team_id provided, ensure current_user is team owner
     if data.team_id:
         team = _ensure_team_member(data.team_id, current_user.id, db)
-        if team.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="only team owner can create team binding")
+        member = _get_team_member(data.team_id, current_user.id, db)
+        if not _is_manager(member):
+            raise HTTPException(status_code=403, detail="only team owner or admin can create team binding")
     # remove existing binding for same user & team/provider
     old = db.query(ProviderBinding).filter(
         ProviderBinding.user_id == current_user.id,
@@ -148,9 +166,9 @@ def select_model(data: SelectionRequest, current_user=Depends(get_current_user),
         raise HTTPException(status_code=404, detail="binding not found")
     # If team binding, only owner can change
     if binding.team_id:
-        team = db.query(Team).filter(Team.id == binding.team_id).first()
-        if not team or team.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="only team owner can change selection")
+        member = _get_team_member(binding.team_id, current_user.id, db)
+        if not _is_manager(member):
+            raise HTTPException(status_code=403, detail="only team owner or admin can change selection")
     # update credentials JSON with selected_model
     creds = {}
     try:
@@ -161,3 +179,30 @@ def select_model(data: SelectionRequest, current_user=Depends(get_current_user),
     binding.credentials = json.dumps(creds)
     db.commit()
     return {"status": "ok", "selected_model": data.selected_model}
+
+
+@router.get("/prompts")
+def get_prompt_settings(team_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    member = _get_team_member(team_id, current_user.id, db)
+    if not _is_manager(member):
+        raise HTTPException(status_code=403, detail="only team owner or admin can view prompts")
+    return {
+        "team_id": team_id,
+        "prompts": get_team_llm_prompts(db, team_id),
+    }
+
+
+@router.put("/prompts")
+def update_prompt_settings(data: PromptSettingsRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    member = _get_team_member(data.team_id, current_user.id, db)
+    if not _is_manager(member):
+        raise HTTPException(status_code=403, detail="only team owner or admin can edit prompts")
+
+    team = db.query(Team).filter(Team.id == data.team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="team not found")
+
+    prompts = normalize_llm_prompts(data.prompts)
+    team.llm_prompts = serialize_llm_prompts(prompts)
+    db.commit()
+    return {"status": "ok", "team_id": data.team_id, "prompts": prompts}
