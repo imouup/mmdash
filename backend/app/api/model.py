@@ -10,10 +10,16 @@ from app.api.auth import get_current_user
 from app.models import User
 from app.services.document_provider import get_provider
 from app.services.cache import get_cached_page, set_cached_page
-from app.services.markdown_blocks import blocks_to_markdown as _blocks_to_markdown
-from app.services.openai_service import analyze_symbols, analyze_structure, explain_formula, find_errors
+from app.services.markdown_blocks import content_to_markdown as _content_to_markdown
+from app.services.model_analysis import (
+    analyze_structure_with_configured_model,
+    analyze_symbols_with_configured_model,
+    explain_formula_with_configured_model,
+    find_errors_with_configured_model,
+)
 
 router = APIRouter()
+DOCUMENT_PROVIDER_TYPES = ("notion", "local_file")
 
 
 class CreatePageRequest(BaseModel):
@@ -27,7 +33,15 @@ class UpdateContentRequest(BaseModel):
 
 
 def _get_binding(db: Session, user_id: str) -> ProviderBinding:
-    binding = db.query(ProviderBinding).filter(ProviderBinding.user_id == user_id).first()
+    binding = (
+        db.query(ProviderBinding)
+        .filter(
+            ProviderBinding.user_id == user_id,
+            ProviderBinding.provider_type.in_(DOCUMENT_PROVIDER_TYPES),
+        )
+        .order_by(ProviderBinding.created_at.desc())
+        .first()
+    )
     if not binding:
         raise HTTPException(status_code=400, detail="Please bind a document provider first")
     return binding
@@ -80,7 +94,7 @@ async def get_model_content(project_id: str, request: Request, current_user: Use
     result = await _fetch_model_content(project_id, current_user, db, token)
     content = result["content"]
     blocks = content.get("blocks", [])
-    markdown = _blocks_to_markdown(blocks)
+    markdown = _content_to_markdown(content)
     return {
         "page_id": result["page_id"],
         "markdown": markdown,
@@ -148,7 +162,7 @@ async def update_model_content(
     invalidate_page(binding.provider_type, project.model_data_page_id)
 
     blocks = result.get("blocks", [])
-    markdown = _blocks_to_markdown(blocks)
+    markdown = _content_to_markdown(result)
     return {
         "page_id": result["page_id"],
         "title": result.get("title", ""),
@@ -202,7 +216,10 @@ async def create_and_bind_model_page(
 async def get_symbols(project_id: str, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     result = await get_model_content(project_id, request, current_user, db)
     markdown = result.get("markdown", "")
-    symbols = await analyze_symbols(markdown)
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    symbols = await analyze_symbols_with_configured_model(markdown, project, current_user, db)
     return {"symbols": symbols, "disclaimer": "仅供参考"}
 
 
@@ -210,7 +227,10 @@ async def get_symbols(project_id: str, request: Request, current_user: User = De
 async def get_structure(project_id: str, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     result = await get_model_content(project_id, request, current_user, db)
     markdown = result.get("markdown", "")
-    structure = await analyze_structure(markdown)
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    structure = await analyze_structure_with_configured_model(markdown, project, current_user, db)
     return {"structure": structure, "disclaimer": "仅供参考"}
 
 
@@ -218,7 +238,10 @@ async def get_structure(project_id: str, request: Request, current_user: User = 
 async def explain_formula_endpoint(project_id: str, formula: str, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     result = await get_model_content(project_id, request, current_user, db)
     markdown = result.get("markdown", "")
-    explanation = await explain_formula(formula, markdown[:2000])
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    explanation = await explain_formula_with_configured_model(formula, markdown[:2000], project, current_user, db)
     return {"explanation": explanation, "disclaimer": "仅供参考"}
 
 
@@ -226,5 +249,8 @@ async def explain_formula_endpoint(project_id: str, formula: str, request: Reque
 async def get_errors(project_id: str, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     result = await get_model_content(project_id, request, current_user, db)
     markdown = result.get("markdown", "")
-    errors = await find_errors(markdown)
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    errors = await find_errors_with_configured_model(markdown, project, current_user, db)
     return {"errors": errors, "disclaimer": "仅供参考"}

@@ -9,9 +9,27 @@ from app.api.auth import get_current_user
 from app.services.document_provider import DocumentProvider
 from app.services.document_provider import get_provider
 from app.services.cache import get_cached_page
-from app.services.markdown_blocks import blocks_to_markdown
+from app.services.markdown_blocks import content_to_markdown
 
 router = APIRouter()
+
+
+def _build_diff_chunks(base_text: str, compare_text: str) -> list[dict]:
+    base_lines = (base_text or "").splitlines()
+    compare_lines = (compare_text or "").splitlines()
+    matcher = difflib.SequenceMatcher(None, base_lines, compare_lines)
+    chunks: list[dict] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            if i1 != i2:
+                chunks.append({"type": "context", "lines": base_lines[i1:i2]})
+        elif tag == "delete":
+            chunks.append({"type": "delete", "lines": base_lines[i1:i2]})
+        elif tag == "insert":
+            chunks.append({"type": "insert", "lines": compare_lines[j1:j2]})
+        elif tag == "replace":
+            chunks.append({"type": "replace", "before": base_lines[i1:i2], "after": compare_lines[j1:j2]})
+    return chunks
 
 
 def _get_binding(db: Session, user_id: str) -> ProviderBinding:
@@ -52,11 +70,11 @@ async def _fetch_current_markdown(project: Project, binding: ProviderBinding, to
 
     cached = get_cached_page(binding.provider_type, project.model_data_page_id)
     if cached:
-        return blocks_to_markdown(cached.get("blocks", []))
+        return content_to_markdown(cached)
 
     try:
         content = await provider.fetch_page_content(project.model_data_page_id, credentials)
-        return blocks_to_markdown(content.get("blocks", []))
+        return content_to_markdown(content)
     except HTTPException:
         if strict:
             raise
@@ -135,11 +153,13 @@ async def diff_commits(project_id: str, base_id: str, compare_id: str, current_u
         fromfile=f"{base.commit_message} by {base_user.email if base_user else '未知'}",
         tofile=f"{compare.commit_message} by {compare_user.email if compare_user else '未知'}",
     ))
+    diff_chunks = _build_diff_chunks(base.snapshot_content or "", compare.snapshot_content or "")
 
     return {
         "base": {"id": base.id, "message": base.commit_message, "author": base_user.email if base_user else "未知"},
         "compare": {"id": compare.id, "message": compare.commit_message, "author": compare_user.email if compare_user else "未知"},
         "diff": "".join(diff),
+        "diff_chunks": diff_chunks,
     }
 
 
@@ -171,6 +191,7 @@ async def rollback_preview(project_id: str, snapshot_id: str, request: Request, 
         fromfile="current",
         tofile=f"rollback:{snapshot.commit_message}",
     ))
+    diff_chunks = _build_diff_chunks(current_markdown, target_markdown)
     snapshot_user = db.query(User).filter(User.id == snapshot.user_id).first()
 
     return {
@@ -189,6 +210,7 @@ async def rollback_preview(project_id: str, snapshot_id: str, request: Request, 
             "markdown": target_markdown,
         },
         "diff": "".join(diff),
+        "diff_chunks": diff_chunks,
         "can_write": can_write,
         "provider_type": provider_type,
     }

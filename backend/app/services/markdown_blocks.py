@@ -30,7 +30,17 @@ def blocks_to_markdown(blocks: list[dict]) -> str:
         elif block_type == "divider":
             md_lines.append("---")
 
-    return "\n\n".join(md_lines)
+    return "\n".join(md_lines)
+
+
+def content_to_markdown(content: dict) -> str:
+    """Return provider markdown without losing user-authored blank lines."""
+    markdown = content.get("markdown")
+    if markdown is None:
+        markdown = content.get("content")
+    if markdown is not None:
+        return markdown
+    return blocks_to_markdown(content.get("blocks", []))
 
 
 def markdown_to_blocks(markdown: str) -> list[dict]:

@@ -32,6 +32,7 @@ class LocalFileProvider(DocumentProvider):
         return {
             "page_id": data["page_id"],
             "blocks": data.get("blocks", []),
+            "markdown": data.get("content", ""),
             "title": data.get("title", ""),
         }
 
